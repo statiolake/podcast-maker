@@ -6,12 +6,19 @@ final class AudioPipeline {
     private let vad = VADSegmenter()
     private let asr = WhisperASRWorker()
     private var streamTime: Double?
+    private var lastLogTime: TimeInterval = 0
+    private var loggedFormat = false
 
     func handle(buffer: AVAudioPCMBuffer) {
         guard let channelData = buffer.floatChannelData else { return }
         let channels = Int(buffer.format.channelCount)
         let frames = Int(buffer.frameLength)
         if frames == 0 { return }
+
+        if !loggedFormat {
+            loggedFormat = true
+            AppLog.shared.add("Audio format: rate=\(buffer.format.sampleRate)Hz channels=\(channels)")
+        }
 
         var mono = [Float](repeating: 0, count: frames)
         if channels == 1 {
@@ -50,8 +57,15 @@ final class AudioPipeline {
         streamTime = chunkStart + duration
 
         let samples16k = resampleTo16k(mono, sampleRate: sampleRate)
+        let now = Date().timeIntervalSince1970
+        if now - lastLogTime > 5 {
+            lastLogTime = now
+            let rms = computeRMS(samples16k)
+            AppLog.shared.add(String(format: "Audio pipeline alive (chunk=%.2fs rms=%.4f)", duration, rms))
+        }
         vad.process(samples: samples16k, startTime: chunkStart) { [weak self] segStart, segEnd, samples in
             guard let self else { return }
+            AppLog.shared.add(String(format: "VAD segment ready start=%.2f end=%.2f len=%.2fs", segStart, segEnd, segEnd - segStart))
             guard let record = self.storage.saveSegment(samples: samples, startTime: segStart, endTime: segEnd) else {
                 return
             }
@@ -76,5 +90,14 @@ final class AudioPipeline {
             output[i] = samples[i0] * (1 - frac) + samples[i1] * frac
         }
         return output
+    }
+
+    private func computeRMS(_ samples: [Float]) -> Float {
+        if samples.isEmpty { return 0 }
+        var sum: Float = 0
+        for sample in samples {
+            sum += sample * sample
+        }
+        return sqrt(sum / Float(samples.count))
     }
 }

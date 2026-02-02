@@ -3,12 +3,13 @@ import Foundation
 struct VADConfig {
     let sampleRate: Double = 16000
     let frameMs: Double = 20
-    let startMs: Double = 300
-    let endMs: Double = 900
-    let minLenSeconds: Double = 1.5
-    let maxLenSeconds: Double = 120
+    let startMs: Double = 200
+    let endMs: Double = 400
+    let minLenSeconds: Double = 0.8
+    let maxLenSeconds: Double = 20
     let paddingSeconds: Double = 0.3
-    let rmsThreshold: Float = 0.015
+    let startThreshold: Float = 0.03
+    let endThreshold: Float = 0.02
 }
 
 final class VADSegmenter {
@@ -45,16 +46,18 @@ final class VADSegmenter {
             let frame = Array(samples[cursor..<(cursor + frameSamples)])
             let frameStartTime = startTime + Double(cursor) / config.sampleRate
             let rms = computeRMS(frame)
-            let isVoice = rms >= config.rmsThreshold
+            let isVoiceStart = rms >= config.startThreshold
+            let isVoice = rms >= config.endThreshold
 
             if !inSpeech {
-                if isVoice {
+                if isVoiceStart {
                     voiceBuffer.append(frame)
                     if voiceBuffer.count > startFrames {
                         voiceBuffer.removeFirst()
                     }
                     if voiceBuffer.count == startFrames {
                         inSpeech = true
+                        AppLog.shared.add("VAD start")
                         segmentStartTime = frameStartTime - Double(startFrames - 1) * frameDuration
                         segmentFrames = preRollFrames + voiceBuffer
                         lastVoiceFrameIndex = segmentFrames.count - 1
@@ -79,8 +82,10 @@ final class VADSegmenter {
                 }
 
                 if segmentFrames.count >= maxFrames {
+                    AppLog.shared.add("VAD split (max length)")
                     finalizeSegment(onSegment: onSegment)
                 } else if silenceRun >= endFrames {
+                    AppLog.shared.add("VAD end")
                     finalizeSegment(onSegment: onSegment)
                 }
             }
@@ -99,6 +104,8 @@ final class VADSegmenter {
             let duration = Double(totalFrames) * frameDuration
             let endTime = segmentStartTime + duration
             onSegment(segmentStartTime, endTime, samples)
+        } else {
+            AppLog.shared.add("VAD discard (too short)")
         }
 
         preRollFrames = Array(segmentFrames.suffix(paddingFrames))

@@ -10,6 +10,7 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
     private let totalCostLabel = NSTextField(labelWithString: "")
     private let statusLabel = NSTextField(labelWithString: "Bedrock status: idle")
     private let testButton = NSButton(title: "Test Bedrock", target: nil, action: nil)
+    private let copyLogButton = NSButton(title: "Copy Log", target: nil, action: nil)
     private let tabView = NSTabView()
     private let logTextView = NSTextView()
 
@@ -49,6 +50,9 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
 
         testButton.target = self
         testButton.action = #selector(runBedrockTest)
+
+        copyLogButton.target = self
+        copyLogButton.action = #selector(copyLogToClipboard)
 
         let awsLabel = NSTextField(labelWithString: "AWS_PROFILE")
         awsField.placeholderString = "default"
@@ -95,11 +99,18 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
 
         let logView = NSView()
         logView.addSubview(scrollView)
+        logView.addSubview(copyLogButton)
         NSLayoutConstraint.activate([
             scrollView.leadingAnchor.constraint(equalTo: logView.leadingAnchor, constant: 12),
             scrollView.trailingAnchor.constraint(equalTo: logView.trailingAnchor, constant: -12),
             scrollView.topAnchor.constraint(equalTo: logView.topAnchor, constant: 12),
             scrollView.bottomAnchor.constraint(equalTo: logView.bottomAnchor, constant: -12)
+        ])
+
+        copyLogButton.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            copyLogButton.trailingAnchor.constraint(equalTo: logView.trailingAnchor, constant: -12),
+            copyLogButton.topAnchor.constraint(equalTo: logView.topAnchor, constant: 8)
         ])
 
         tabView.translatesAutoresizingMaskIntoConstraints = false
@@ -162,5 +173,11 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
     @objc private func refreshLogs() {
         logTextView.string = AppLog.shared.allText()
         logTextView.scrollToEndOfDocument(nil)
+    }
+
+    @objc private func copyLogToClipboard() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(AppLog.shared.allText(), forType: .string)
     }
 }

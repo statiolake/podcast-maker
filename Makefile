@@ -6,7 +6,6 @@ MACOS_DIR := $(APP_DIR)/Contents/MacOS
 RES_DIR := $(APP_DIR)/Contents/Resources
 FRAMEWORKS_DIR := $(APP_DIR)/Contents/Frameworks
 BUILD_PRODUCTS := $(ROOT_DIR)/.build/arm64-apple-macosx/release
-SWIFT_BUILD_LOG := $(BUILD_DIR)/swift-build.log
 WHISPER_DIR := $(ROOT_DIR)/third_party/whisper
 WHISPER_CLI := $(WHISPER_DIR)/whisper-cli
 WHISPER_MODELS := $(WHISPER_DIR)/models
@@ -15,7 +14,7 @@ WHISPER_MODELS := $(WHISPER_DIR)/models
 
 build:
 	mkdir -p "$(MACOS_DIR)" "$(RES_DIR)" "$(FRAMEWORKS_DIR)"
-	swift build -c release -Xswiftc -suppress-warnings > "$(SWIFT_BUILD_LOG)" 2>&1 || (cat "$(SWIFT_BUILD_LOG)"; exit 1)
+	swift build -c release
 	cp "$(BUILD_PRODUCTS)/$(APP_NAME)" "$(MACOS_DIR)/$(APP_NAME)"
 	cp "$(ROOT_DIR)/Resources/Info.plist" "$(APP_DIR)/Contents/Info.plist"
 	@if [ -d "$(BUILD_PRODUCTS)/whisper.framework" ]; then \
