@@ -6,6 +6,7 @@ struct DocumentMetadata: Codable {
     let endTime: Double
     let summary: String
     let transcript: String
+    let formattedTranscript: String
     let topics: [TopicSegment]
     let createdAt: Double
 }

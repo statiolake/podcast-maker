@@ -5,6 +5,7 @@ struct TopicSegment: Codable {
     let startTime: Double
     let endTime: Double
     let summary: String
+    let formattedTranscript: String
 }
 
 final class BedrockTopicSegmenter {
@@ -28,7 +29,8 @@ Your task:
       "title": "short title",
       "startTime": 1700000000.00,
       "endTime": 1700001234.56,
-      "summary": "short summary"
+      "summary": "short summary",
+      "formattedTranscript": "cleaned transcript for this topic"
     }
   ]
 }
@@ -40,6 +42,7 @@ Rules:
 - Prefer topic segments to be at least 10 minutes long. Only create shorter topics if necessary (e.g., transcript is short or there is a clear semantic boundary).
 - Output JSON only, no extra text, no code fences.
 - Summaries and titles must be in Japanese.
+- formattedTranscript must be in Japanese and easy to read (remove filler, normalize punctuation, add line breaks).
 
 Transcript:
 \(transcript)
@@ -87,10 +90,11 @@ Transcript:
         for item in rawTopics {
             let title = item["title"] as? String ?? "無題"
             let summary = item["summary"] as? String ?? ""
+            let formatted = item["formattedTranscript"] as? String ?? ""
             let startTime = parseDouble(item["startTime"]) ?? 0
             let endTime = parseDouble(item["endTime"]) ?? 0
             if startTime <= 0 || endTime <= 0 { continue }
-            topics.append(TopicSegment(title: title, startTime: startTime, endTime: endTime, summary: summary))
+            topics.append(TopicSegment(title: title, startTime: startTime, endTime: endTime, summary: summary, formattedTranscript: formatted))
         }
         return topics
     }

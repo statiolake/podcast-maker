@@ -33,12 +33,14 @@ final class DocumentBuilder {
                             seg.endTime >= topic.startTime && seg.startTime <= topic.endTime
                         }
                         guard let audio = self.merger.merge(segments: topicSegments) else { continue }
+                        let topicTranscript = topicSegments.map { $0.text }.joined(separator: " ")
                         let metadata = DocumentMetadata(
                             title: topic.title,
                             startTime: topic.startTime,
                             endTime: topic.endTime,
                             summary: topic.summary,
-                            transcript: transcript,
+                            transcript: topicTranscript,
+                            formattedTranscript: topic.formattedTranscript,
                             topics: topics,
                             createdAt: Date().timeIntervalSince1970
                         )
