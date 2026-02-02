@@ -146,7 +146,7 @@ final class SegmentStorage {
     }
 
     private func sanitizeTranscriptText(_ text: String) -> String {
-        let pattern = "ご視聴ありがとうございました[！。]"
+        let pattern = "ご視聴ありがとうございました(?:[！。])?"
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
             return text
         }
