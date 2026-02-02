@@ -68,7 +68,7 @@ final class SegmentStorage {
             TranscriptSegment(
                 startTime: startTime + segment.startTime,
                 endTime: startTime + segment.endTime,
-                text: sanitizeTranscriptText(segment.text)
+                text: segment.text
             )
         }
 
@@ -145,15 +145,6 @@ final class SegmentStorage {
         }
     }
 
-    private func sanitizeTranscriptText(_ text: String) -> String {
-        let pattern = "ご視聴ありがとうございました(?:[！。])?"
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
-            return text
-        }
-        let range = NSRange(text.startIndex..<text.endIndex, in: text)
-        let replaced = regex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: "[BLANK_AUDIO]")
-        return replaced
-    }
 }
 
 private extension Data {

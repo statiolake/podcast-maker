@@ -49,11 +49,12 @@ final class TranscriptAggregator {
         return segments.sorted { $0.startTime < $1.startTime }
     }
 
-    func combinedTranscriptText(segments: [SegmentTranscript]) -> String {
-        segments.map { seg in
+    func combinedTranscriptText(segments: [SegmentTranscript], sanitizeForBedrock: Bool) -> String {
+        let raw = segments.map { seg in
             let start = String(format: "%.2f", seg.startTime)
             let end = String(format: "%.2f", seg.endTime)
             return "\(start)|\(end)|\(seg.text)"
         }.joined(separator: "\n")
+        return sanitizeForBedrock ? TranscriptSanitizer.sanitizeForBedrock(raw) : raw
     }
 }

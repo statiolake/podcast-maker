@@ -19,7 +19,7 @@ final class DocumentBuilder {
                 return
             }
 
-            let transcript = self.aggregator.combinedTranscriptText(segments: segments)
+            let transcript = self.aggregator.combinedTranscriptText(segments: segments, sanitizeForBedrock: true)
             AppLog.shared.add("Bedrock segmentation started (segments=\(segments.count))")
 
             Task {
@@ -40,7 +40,7 @@ final class DocumentBuilder {
 
                         for seg in topicSegments {
                             let trimmed = seg.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                            let isBlank = trimmed.isEmpty || trimmed == "[BLANK_AUDIO]"
+                            let isBlank = TranscriptSanitizer.isBlank(trimmed)
                             if isBlank {
                                 pendingSilence = true
                                 continue
