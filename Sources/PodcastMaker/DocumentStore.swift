@@ -44,7 +44,8 @@ final class DocumentStore {
         guard let items = try? fileManager.contentsOfDirectory(at: root, includingPropertiesForKeys: [.contentModificationDateKey]) else {
             return []
         }
-        return items.sorted { a, b in
+        let validItems = items.filter { loadMetadata(at: $0) != nil }
+        return validItems.sorted { a, b in
             let da = (try? a.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
             let db = (try? b.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date.distantPast
             return da > db
