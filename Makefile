@@ -15,7 +15,7 @@ WHISPER_MODELS := $(WHISPER_DIR)/models
 
 build:
 	mkdir -p "$(MACOS_DIR)" "$(RES_DIR)" "$(FRAMEWORKS_DIR)"
-	@swift build -c release -Xswiftc -suppress-warnings > "$(SWIFT_BUILD_LOG)" 2>&1 || (cat "$(SWIFT_BUILD_LOG)"; exit 1)
+	swift build -c release -Xswiftc -suppress-warnings > "$(SWIFT_BUILD_LOG)" 2>&1 || (cat "$(SWIFT_BUILD_LOG)"; exit 1)
 	cp "$(BUILD_PRODUCTS)/$(APP_NAME)" "$(MACOS_DIR)/$(APP_NAME)"
 	cp "$(ROOT_DIR)/Resources/Info.plist" "$(APP_DIR)/Contents/Info.plist"
 	@if [ -d "$(BUILD_PRODUCTS)/whisper.framework" ]; then \
@@ -24,7 +24,7 @@ build:
 	else \
 		echo "whisper.framework not found in $(BUILD_PRODUCTS)"; \
 	fi
-	@/usr/bin/install_name_tool -add_rpath "@executable_path/../Frameworks" "$(MACOS_DIR)/$(APP_NAME)" || true
+	/usr/bin/install_name_tool -add_rpath "@executable_path/../Frameworks" "$(MACOS_DIR)/$(APP_NAME)" || true
 	$(MAKE) bundle-whisper
 	if command -v codesign >/dev/null 2>&1; then \
 		codesign --force --deep --sign - "$(APP_DIR)"; \
@@ -32,7 +32,7 @@ build:
 	@echo "Built $(APP_DIR)"
 
 bundle-whisper:
-	@mkdir -p "$(RES_DIR)/whisper"
+	mkdir -p "$(RES_DIR)/whisper"
 	@if [ -x "$(WHISPER_CLI)" ]; then \
 		cp "$(WHISPER_CLI)" "$(RES_DIR)/whisper/"; \
 		echo "Bundled whisper-cli into $(RES_DIR)/whisper"; \
