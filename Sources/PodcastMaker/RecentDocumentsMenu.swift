@@ -13,7 +13,7 @@ final class RecentDocumentsMenu {
         }
 
         for folder in items {
-            let title = folder.lastPathComponent
+            let title = formatTitle(folder: folder)
             let item = NSMenuItem(title: title, action: #selector(openDocument(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = folder
@@ -29,5 +29,18 @@ final class RecentDocumentsMenu {
         playerWindow = PlayerWindowController(audioURL: audioURL, metadata: metadata)
         playerWindow?.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func formatTitle(folder: URL) -> String {
+        if let metadata = store.loadMetadata(at: folder) {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy/MM/dd HH:mm"
+            let start = Date(timeIntervalSince1970: metadata.startTime)
+            let end = Date(timeIntervalSince1970: metadata.endTime)
+            let startStr = formatter.string(from: start)
+            let endStr = formatter.string(from: end)
+            return "\(metadata.title) (\(startStr) 〜 \(endStr.split(separator: " ").last ?? Substring("")))"
+        }
+        return folder.lastPathComponent
     }
 }

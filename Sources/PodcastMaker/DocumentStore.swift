@@ -21,7 +21,7 @@ final class DocumentStore {
 
     func saveDocument(title: String, audioData: Data, metadata: DocumentMetadata) -> URL? {
         let root = documentsRoot()
-        let dateDir = ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: metadata.startTime))
+        let dateDir = folderStamp(from: metadata.startTime)
         let safeTitle = sanitize(title)
         let folder = root.appendingPathComponent("\(dateDir)_\(safeTitle)", isDirectory: true)
 
@@ -62,5 +62,13 @@ final class DocumentStore {
         let cleaned = text.unicodeScalars.map { allowed.contains($0) ? Character($0) : "_" }
         let out = String(cleaned).replacingOccurrences(of: "  ", with: " ")
         return out.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func folderStamp(from epoch: Double) -> String {
+        let date = Date(timeIntervalSince1970: epoch)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyyMMdd-HHmm"
+        return formatter.string(from: date)
     }
 }
