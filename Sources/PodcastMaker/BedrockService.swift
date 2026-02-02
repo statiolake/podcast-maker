@@ -38,7 +38,7 @@ final class BedrockService {
             setenv("AWS_PROFILE", profile, 1)
         }
 
-        var config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: region)
+        let config = try await BedrockRuntimeClient.BedrockRuntimeClientConfiguration(region: region)
         if !profile.isEmpty {
             let resolver = ProfileAWSCredentialIdentityResolver(profileName: profile)
             config.awsCredentialIdentityResolver = resolver

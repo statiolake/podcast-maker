@@ -4,7 +4,7 @@ final class AudioPipeline {
     private let queue = DispatchQueue(label: "audio.pipeline")
     private let storage = SegmentStorage()
     private let vad = VADSegmenter()
-    private let asr = WhisperASRWorker()
+    private let asr = WhisperASRWorker.shared
     private var streamTime: Double?
     private var lastLogTime: TimeInterval = 0
     private var loggedFormat = false

@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         setupMenu()
         AppLog.shared.add("App launched")
+        ModelManager.shared.ensureModelAvailable()
         requestMicAccessAndStart()
     }
 

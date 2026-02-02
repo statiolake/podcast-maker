@@ -2,25 +2,75 @@ import Foundation
 import whisper
 
 final class WhisperASRWorker {
+    static let shared = WhisperASRWorker()
+
     private let queue = DispatchQueue(label: "asr.worker", qos: .utility)
     private var engine: WhisperEngine?
+    private var pending: [(SegmentRecord, [Float])] = []
+
+    private init() {
+        NotificationCenter.default.addObserver(self, selector: #selector(handleModelReady), name: .modelReady, object: nil)
+    }
 
     func enqueue(record: SegmentRecord, samples: [Float], onResult: @escaping (String, Double, [TranscriptSegment]) -> Void) {
         queue.async { [record, samples, weak self] in
             guard let self else { return }
-            if self.engine == nil {
-                self.engine = WhisperEngine()
-            }
-            guard let engine = self.engine else {
-                AppLog.shared.add("Whisper engine unavailable (model missing?)")
+            if self.engine == nil && !self.tryInitEngineIfReady() {
+                self.pending.append((record, samples))
+                AppLog.shared.add("ASR queued id=\(record.id) (pending=\(self.pending.count))")
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: .queueUpdated, object: nil)
+                }
                 return
             }
-            let start = Date()
-            let segments = engine.transcribe(samples: samples)
-            let elapsed = Date().timeIntervalSince(start)
-            let delay = Date().timeIntervalSince1970 - record.endTime
-            AppLog.shared.add(String(format: "ASR done id=%@ segments=%d elapsed=%.2fs delay=%.2fs", record.id, segments.count, elapsed, delay))
-            onResult(record.id, record.startTime, segments)
+            self.process(record: record, samples: samples, onResult: onResult)
+        }
+    }
+
+    func queueStatus() -> (pending: Int, modelReady: Bool, downloading: Bool) {
+        let modelStatus = ModelManager.shared.status()
+        return queue.sync {
+            (pending: pending.count, modelReady: modelStatus.ready, downloading: modelStatus.downloading)
+        }
+    }
+
+    private func process(record: SegmentRecord, samples: [Float], onResult: @escaping (String, Double, [TranscriptSegment]) -> Void) {
+        guard let engine = engine else { return }
+        let start = Date()
+        let segments = engine.transcribe(samples: samples)
+        let elapsed = Date().timeIntervalSince(start)
+        let delay = Date().timeIntervalSince1970 - record.endTime
+        AppLog.shared.add(String(format: "ASR done id=%@ segments=%d elapsed=%.2fs delay=%.2fs", record.id, segments.count, elapsed, delay))
+        onResult(record.id, record.startTime, segments)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .queueUpdated, object: nil)
+        }
+    }
+
+    private func tryInitEngineIfReady() -> Bool {
+        if engine != nil { return true }
+        if !ModelManager.shared.status().ready { return false }
+        engine = WhisperEngine()
+        if engine == nil {
+            AppLog.shared.add("Whisper init failed")
+            return false
+        }
+        return true
+    }
+
+    @objc private func handleModelReady() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            guard self.tryInitEngineIfReady() else { return }
+            while !self.pending.isEmpty {
+                let (record, samples) = self.pending.removeFirst()
+                self.process(record: record, samples: samples, onResult: { id, startTime, segments in
+                    SegmentStorage().saveTranscript(id: id, startTime: startTime, segments: segments)
+                })
+            }
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .queueUpdated, object: nil)
+            }
         }
     }
 }
@@ -31,7 +81,7 @@ final class WhisperEngine {
 
     init?() {
         guard let modelPath = Self.findModelPath() else {
-            AppLog.shared.add("Whisper model not found in Resources/whisper/models")
+            AppLog.shared.add("Whisper model not found")
             return nil
         }
         AppLog.shared.add("Whisper model: \(modelPath)")
@@ -92,16 +142,6 @@ final class WhisperEngine {
     }
 
     private static func findModelPath() -> String? {
-        let bundle = Bundle.main
-        if let modelsURL = bundle.resourceURL?.appendingPathComponent("whisper/models", isDirectory: true),
-           let files = try? FileManager.default.contentsOfDirectory(atPath: modelsURL.path) {
-            if let gguf = files.first(where: { $0.hasSuffix(".gguf") }) {
-                return modelsURL.appendingPathComponent(gguf).path
-            }
-            if let bin = files.first(where: { $0.hasSuffix(".bin") }) {
-                return modelsURL.appendingPathComponent(bin).path
-            }
-        }
-        return nil
+        return ModelManager.shared.modelPath()
     }
 }

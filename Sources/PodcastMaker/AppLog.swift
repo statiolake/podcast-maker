@@ -37,4 +37,6 @@ final class AppLog {
 
 extension Notification.Name {
     static let logUpdated = Notification.Name("PodcastMakerLogUpdated")
+    static let modelReady = Notification.Name("PodcastMakerModelReady")
+    static let queueUpdated = Notification.Name("PodcastMakerQueueUpdated")
 }
