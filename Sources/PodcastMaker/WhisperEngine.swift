@@ -78,6 +78,7 @@ final class WhisperASRWorker {
 final class WhisperEngine {
     private var ctx: OpaquePointer?
     private let timeScale: Double = 0.01
+    private let languageCString: UnsafeMutablePointer<CChar>?
 
     init?() {
         guard let modelPath = Self.findModelPath() else {
@@ -85,6 +86,7 @@ final class WhisperEngine {
             return nil
         }
         AppLog.shared.add("Whisper model: \(modelPath)")
+        languageCString = strdup("ja")
         var params = whisper_context_default_params()
         params.use_gpu = true
         params.flash_attn = false
@@ -99,6 +101,9 @@ final class WhisperEngine {
         if let ctx {
             whisper_free(ctx)
         }
+        if let languageCString {
+            free(languageCString)
+        }
     }
 
     func transcribe(samples: [Float]) -> [TranscriptSegment] {
@@ -108,6 +113,10 @@ final class WhisperEngine {
         params.print_realtime = false
         params.print_timestamps = false
         params.translate = false
+        params.detect_language = false
+        if let languageCString {
+            params.language = UnsafePointer(languageCString)
+        }
         params.n_threads = Int32(max(2, ProcessInfo.processInfo.activeProcessorCount / 2))
         params.offset_ms = 0
         params.duration_ms = 0

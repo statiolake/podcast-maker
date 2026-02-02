@@ -1,6 +1,6 @@
 import Foundation
 
-final class ModelManager: NSObject, URLSessionDownloadDelegate {
+final class ModelManager: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     static let shared = ModelManager()
 
     private let fileManager = FileManager.default
