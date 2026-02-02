@@ -1,6 +1,11 @@
 import Foundation
 import AWSBedrockRuntime
 import AWSSDKIdentity
+import Smithy
+
+@_spi(SmithyDocumentImpl) import struct Smithy.StringMapDocument
+@_spi(SmithyDocumentImpl) import struct Smithy.StringDocument
+@_spi(SmithyDocumentImpl) import struct Smithy.IntegerDocument
 
 struct BedrockUsage {
     let inputTokens: Int
@@ -13,10 +18,12 @@ struct BedrockUsage {
 final class BedrockService {
     private let tracker: CostTracker
     private let region: String
+    private let thinkingBudgetTokens: Int
 
-    init(tracker: CostTracker) {
+    init(tracker: CostTracker, thinkingBudgetTokens: Int = 4000) {
         self.tracker = tracker
         self.region = ProcessInfo.processInfo.environment["AWS_REGION"] ?? "us-east-1"
+        self.thinkingBudgetTokens = thinkingBudgetTokens
     }
 
     func test(prompt: String, profile: String) async throws -> String {
@@ -30,6 +37,18 @@ final class BedrockService {
             cacheHit: response.usage.cacheHitTokens
         )
         AppLog.shared.add("Bedrock test succeeded (input=\(response.usage.inputTokens), output=\(response.usage.outputTokens))")
+        return response.text
+    }
+
+    func invokeRaw(prompt: String, profile: String) async throws -> String {
+        let response = try await invoke(prompt: prompt, profile: profile)
+        tracker.recordUsage(
+            input: response.usage.inputTokens,
+            output: response.usage.outputTokens,
+            cacheWrite5m: response.usage.cacheWrite5mTokens,
+            cacheWrite1h: response.usage.cacheWrite1hTokens,
+            cacheHit: response.usage.cacheHitTokens
+        )
         return response.text
     }
 
@@ -51,10 +70,10 @@ final class BedrockService {
         )
 
         var inference = BedrockRuntimeClientTypes.InferenceConfiguration()
-        inference.maxTokens = 200
-        inference.temperature = 0.2
+        inference.maxTokens = 10_000
 
         let input = ConverseInput(
+            additionalModelRequestFields: thinkingConfig(),
             inferenceConfig: inference,
             messages: [message],
             modelId: HaikuPricing.modelId
@@ -88,5 +107,16 @@ final class BedrockService {
         )
 
         return (text: text, usage: usage)
+    }
+
+    private func thinkingConfig() -> Smithy.Document {
+        let thinking = StringMapDocument(value: [
+            "type": StringDocument(value: "enabled"),
+            "budget_tokens": IntegerDocument(value: thinkingBudgetTokens)
+        ])
+        let root = StringMapDocument(value: [
+            "thinking": thinking
+        ])
+        return Smithy.Document(root)
     }
 }

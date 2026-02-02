@@ -18,6 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let costTracker = CostTracker()
     private lazy var bedrockService = BedrockService(tracker: costTracker)
     private var settingsWindow: SettingsWindowController?
+    private let documentsMenu = RecentDocumentsMenu()
+    private var documentsSubmenu = NSMenu()
     private var isPaused = false
     private var state: AppState = .paused {
         didSet { updateUI() }
@@ -45,7 +47,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pauseItem.target = self
         menu.addItem(pauseItem)
 
-        let settingsItem = NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: ",")
+        let generateItem = NSMenuItem(title: "ドキュメント作成（直近3時間）", action: #selector(generateDocuments), keyEquivalent: "g")
+        generateItem.target = self
+        menu.addItem(generateItem)
+
+        let recentItem = NSMenuItem(title: "完成品（最新10件）", action: nil, keyEquivalent: "")
+        documentsSubmenu = documentsMenu.buildMenu()
+        recentItem.submenu = documentsSubmenu
+        menu.addItem(recentItem)
+
+        let settingsItem = NSMenuItem(title: "設定", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
 
@@ -157,6 +168,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindow?.refresh()
         settingsWindow?.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func generateDocuments() {
+        let builder = DocumentBuilder(bedrock: bedrockService)
+        AppLog.shared.add("Document build requested (3h)")
+        builder.buildDocuments(hours: 3, profile: costTracker.awsProfile) { [weak self] success in
+            AppLog.shared.add(success ? "Document build completed" : "Document build failed")
+            self?.documentsSubmenu = self?.documentsMenu.buildMenu() ?? NSMenu()
+            if let recentItem = self?.menu.items.first(where: { $0.title == "完成品（最新10件）" }) {
+                recentItem.submenu = self?.documentsSubmenu
+            }
+        }
     }
 
     @objc private func quit() {
