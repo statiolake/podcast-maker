@@ -59,7 +59,9 @@ final class VADSegmenter {
                         inSpeech = true
                         AppLog.shared.add("VAD start")
                         segmentStartTime = frameStartTime - Double(startFrames - 1) * frameDuration
-                        segmentFrames = preRollFrames + voiceBuffer
+                        let overlap = min(preRollFrames.count, voiceBuffer.count)
+                        let prefixFrames = overlap > 0 ? Array(preRollFrames.dropLast(overlap)) : preRollFrames
+                        segmentFrames = prefixFrames + voiceBuffer
                         lastVoiceFrameIndex = segmentFrames.count - 1
                         silenceRun = 0
                         voiceBuffer.removeAll()
