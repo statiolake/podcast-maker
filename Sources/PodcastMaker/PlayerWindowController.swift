@@ -9,8 +9,8 @@ final class PlayerWindowController: NSWindowController {
 
     private let titleLabel = NSTextField(labelWithString: "")
     private let timeLabel = NSTextField(labelWithString: "")
-    private let summaryView = NSTextView()
-    private let transcriptView = NSTextView()
+    private let summaryLabelField = NSTextField(labelWithString: "")
+    private let transcriptLabelField = NSTextField(labelWithString: "")
     private let playButton = NSButton(title: "再生", target: nil, action: nil)
     private let seekSlider = NSSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
     private let currentTimeLabel = NSTextField(labelWithString: "00:00")
@@ -50,15 +50,15 @@ final class PlayerWindowController: NSWindowController {
         timeLabel.stringValue = "\(formatter.string(from: start)) 〜 \(formatter.string(from: end))"
         timeLabel.textColor = .secondaryLabelColor
 
-        summaryView.isEditable = false
-        summaryView.isSelectable = true
-        summaryView.font = NSFont.systemFont(ofSize: 12)
-        summaryView.string = metadata.summary
+        summaryLabelField.font = NSFont.systemFont(ofSize: 12)
+        summaryLabelField.lineBreakMode = .byWordWrapping
+        summaryLabelField.maximumNumberOfLines = 0
+        summaryLabelField.stringValue = metadata.summary
 
-        transcriptView.isEditable = false
-        transcriptView.isSelectable = true
-        transcriptView.font = NSFont.systemFont(ofSize: 12)
-        transcriptView.string = sanitizedTranscript(metadata.transcript)
+        transcriptLabelField.font = NSFont.systemFont(ofSize: 12)
+        transcriptLabelField.lineBreakMode = .byWordWrapping
+        transcriptLabelField.maximumNumberOfLines = 0
+        transcriptLabelField.stringValue = sanitizedTranscript(metadata.formattedTranscript.isEmpty ? metadata.transcript : metadata.formattedTranscript)
 
         playButton.target = self
         playButton.action = #selector(togglePlay)
@@ -89,9 +89,9 @@ final class PlayerWindowController: NSWindowController {
             playButton,
             timeRow,
             summaryLabel,
-            summaryView,
+            summaryLabelField,
             transcriptLabel,
-            transcriptView
+            transcriptLabelField
         ])
         stack.orientation = .vertical
         stack.alignment = .leading
@@ -114,8 +114,8 @@ final class PlayerWindowController: NSWindowController {
             stack.trailingAnchor.constraint(equalTo: scroll.contentView.trailingAnchor),
             stack.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
             seekSlider.widthAnchor.constraint(greaterThanOrEqualToConstant: 280),
-            summaryView.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
-            transcriptView.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor)
+            summaryLabelField.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
+            transcriptLabelField.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor)
         ])
     }
 
