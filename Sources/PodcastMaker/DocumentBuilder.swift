@@ -32,8 +32,28 @@ final class DocumentBuilder {
                         let topicSegments = segments.filter { seg in
                             seg.endTime >= topic.startTime && seg.startTime <= topic.endTime
                         }
-                        guard let audio = self.merger.merge(segments: topicSegments) else { continue }
-                        let topicTranscript = topicSegments.map { $0.text }.joined(separator: " ")
+
+                        var mergeItems: [AudioMerger.MergeItem] = []
+                        var transcriptParts: [String] = []
+                        var pendingSilence = false
+                        var hasSpoken = false
+
+                        for seg in topicSegments {
+                            let trimmed = seg.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                            let isBlank = trimmed.isEmpty || trimmed == "[BLANK_AUDIO]"
+                            if isBlank {
+                                pendingSilence = true
+                                continue
+                            }
+                            let insertSilence = hasSpoken && pendingSilence
+                            mergeItems.append(AudioMerger.MergeItem(audioPath: seg.audioPath, insertSilenceBefore: insertSilence))
+                            transcriptParts.append(trimmed)
+                            hasSpoken = true
+                            pendingSilence = false
+                        }
+
+                        guard let audio = self.merger.merge(items: mergeItems, silenceSeconds: 0.5) else { continue }
+                        let topicTranscript = transcriptParts.joined(separator: " ")
                         let metadata = DocumentMetadata(
                             title: topic.title,
                             startTime: topic.startTime,

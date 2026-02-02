@@ -8,17 +8,25 @@ final class AudioMerger {
         let data: Data
     }
 
-    func merge(segments: [SegmentTranscript]) -> Data? {
+    struct MergeItem {
+        let audioPath: String
+        let insertSilenceBefore: Bool
+    }
+
+    func merge(items: [MergeItem], silenceSeconds: Double = 0.5) -> Data? {
         var merged = Data()
         var format: WavData?
 
-        for segment in segments {
-            guard let wav = readWav(from: URL(fileURLWithPath: segment.audioPath)) else { continue }
+        for item in items {
+            guard let wav = readWav(from: URL(fileURLWithPath: item.audioPath)) else { continue }
             if format == nil {
                 format = wav
             }
             if wav.sampleRate != format?.sampleRate || wav.bitsPerSample != format?.bitsPerSample || wav.channels != format?.channels {
                 continue
+            }
+            if item.insertSilenceBefore, let fmt = format {
+                merged.append(silenceData(seconds: silenceSeconds, format: fmt))
             }
             merged.append(wav.data)
         }
@@ -84,6 +92,13 @@ final class AudioMerger {
         header.append(withLittleEndian: dataChunkSize)
 
         return header + pcmData
+    }
+
+    private func silenceData(seconds: Double, format: WavData) -> Data {
+        let bytesPerSample = Int(format.bitsPerSample / 8)
+        let frameCount = Int(Double(format.sampleRate) * seconds)
+        let byteCount = frameCount * Int(format.channels) * bytesPerSample
+        return Data(count: max(0, byteCount))
     }
 
     private func readUInt32LE(_ data: Data, _ offset: Int) -> UInt32 {
