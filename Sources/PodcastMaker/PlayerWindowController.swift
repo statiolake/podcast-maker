@@ -39,6 +39,8 @@ final class PlayerWindowController: NSWindowController {
     private func setupUI() {
         guard let content = window?.contentView else { return }
 
+        window?.delegate = self
+
         titleLabel.stringValue = metadata.title
         titleLabel.font = NSFont.boldSystemFont(ofSize: 14)
 
@@ -72,11 +74,11 @@ final class PlayerWindowController: NSWindowController {
         currentTimeLabel.textColor = .secondaryLabelColor
         durationLabel.textColor = .secondaryLabelColor
 
-        let timeRow = NSStackView(views: [currentTimeLabel, seekSlider, durationLabel])
-        timeRow.orientation = .horizontal
-        timeRow.alignment = .centerY
-        timeRow.spacing = 8
-        timeRow.translatesAutoresizingMaskIntoConstraints = false
+        let playRow = NSStackView(views: [playButton, currentTimeLabel, seekSlider, durationLabel])
+        playRow.orientation = .horizontal
+        playRow.alignment = .centerY
+        playRow.spacing = 8
+        playRow.translatesAutoresizingMaskIntoConstraints = false
 
         let summaryLabel = NSTextField(labelWithString: "要約")
         summaryLabel.font = NSFont.boldSystemFont(ofSize: 12)
@@ -86,8 +88,7 @@ final class PlayerWindowController: NSWindowController {
         let stack = NSStackView(views: [
             titleLabel,
             timeLabel,
-            playButton,
-            timeRow,
+            playRow,
             summaryLabel,
             summaryLabelField,
             transcriptLabel,
@@ -98,8 +99,12 @@ final class PlayerWindowController: NSWindowController {
         stack.spacing = 8
         stack.translatesAutoresizingMaskIntoConstraints = false
 
+        let documentView = NSView()
+        documentView.translatesAutoresizingMaskIntoConstraints = false
+        documentView.addSubview(stack)
+
         let scroll = NSScrollView()
-        scroll.documentView = stack
+        scroll.documentView = documentView
         scroll.hasVerticalScroller = true
         scroll.translatesAutoresizingMaskIntoConstraints = false
 
@@ -110,12 +115,18 @@ final class PlayerWindowController: NSWindowController {
             scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
             scroll.topAnchor.constraint(equalTo: content.topAnchor, constant: 16),
             scroll.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16),
-            stack.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: scroll.contentView.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
+            documentView.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
+            documentView.trailingAnchor.constraint(equalTo: scroll.contentView.trailingAnchor),
+            documentView.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
+            documentView.bottomAnchor.constraint(equalTo: scroll.contentView.bottomAnchor),
+
+            stack.leadingAnchor.constraint(equalTo: documentView.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: documentView.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: documentView.topAnchor),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: documentView.bottomAnchor),
             seekSlider.widthAnchor.constraint(greaterThanOrEqualToConstant: 280),
-            summaryLabelField.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
-            transcriptLabelField.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor)
+            summaryLabelField.widthAnchor.constraint(equalTo: documentView.widthAnchor),
+            transcriptLabelField.widthAnchor.constraint(equalTo: documentView.widthAnchor)
         ])
     }
 
@@ -186,5 +197,12 @@ final class PlayerWindowController: NSWindowController {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty && $0 != "[BLANK_AUDIO]" }
         return lines.joined(separator: "\n")
+    }
+}
+
+extension PlayerWindowController: NSWindowDelegate {
+    func windowWillClose(_ notification: Notification) {
+        player?.stop()
+        stopTimer()
     }
 }
