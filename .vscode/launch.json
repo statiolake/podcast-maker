@@ -1,0 +1,24 @@
+{
+  "configurations": [
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:podcast-maker}",
+      "name": "Debug PodcastMaker",
+      "target": "PodcastMaker",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug PodcastMaker"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:podcast-maker}",
+      "name": "Release PodcastMaker",
+      "target": "PodcastMaker",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release PodcastMaker"
+    }
+  ]
+}
