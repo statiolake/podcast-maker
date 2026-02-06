@@ -78,6 +78,14 @@ final class SegmentStorage {
         guard let data = try? encoder.encode(record) else { return }
         try? data.write(to: transcriptURL)
         AppLog.shared.add("Transcript saved id=\(id) segments=\(segments.count)")
+
+        let previewLines = absoluteSegments
+            .map { $0.text }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !TranscriptSanitizer.isBlank($0) }
+        if !previewLines.isEmpty {
+            TranscriptPreviewStore.shared.append(previewLines.joined(separator: " "))
+        }
     }
 
     private func appendJSONLine<T: Encodable>(_ value: T, to url: URL) {

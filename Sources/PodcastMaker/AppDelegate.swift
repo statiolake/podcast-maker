@@ -10,7 +10,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
-    private var stateItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
     private var pauseItem = NSMenuItem(title: "Pause", action: #selector(togglePause), keyEquivalent: "p")
 
     private let audioEngine = AVAudioEngine()
@@ -18,7 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let importer = AudioImporter()
     private let costTracker = CostTracker()
     private lazy var bedrockService = BedrockService(tracker: costTracker)
-    private var settingsWindow: SettingsWindowController?
+    private var dashboardWindow: DashboardWindowController?
     private let documentsMenu = RecentDocumentsMenu()
     private var documentsSubmenu = NSMenu()
     private var isPaused = false
@@ -41,16 +40,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusItem.button?.title = "PAUSE"
         }
 
-        stateItem.isEnabled = false
-        menu.addItem(stateItem)
-        menu.addItem(NSMenuItem.separator())
-
         pauseItem.target = self
         menu.addItem(pauseItem)
 
         let importItem = NSMenuItem(title: "音声ファイルをインポート...", action: #selector(importAudio), keyEquivalent: "i")
         importItem.target = self
         menu.addItem(importItem)
+
+        let dashboardItem = NSMenuItem(title: "ダッシュボード...", action: #selector(openDashboard), keyEquivalent: ",")
+        dashboardItem.target = self
+        menu.addItem(dashboardItem)
 
         let generateItem = NSMenuItem(title: "ドキュメント作成（直近3時間）", action: #selector(generateDocuments), keyEquivalent: "g")
         generateItem.target = self
@@ -60,10 +59,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         documentsSubmenu = documentsMenu.buildMenu()
         recentItem.submenu = documentsSubmenu
         menu.addItem(recentItem)
-
-        let settingsItem = NSMenuItem(title: "設定", action: #selector(openSettings), keyEquivalent: ",")
-        settingsItem.target = self
-        menu.addItem(settingsItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -132,22 +127,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateUI() {
         switch state {
         case .recording:
-            pauseItem.title = "Pause"
-            stateItem.title = "Recording"
+            pauseItem.title = "録音停止"
             statusItem.button?.image = NSImage(systemSymbolName: "record.circle", accessibilityDescription: "Recording")
             if statusItem.button?.image == nil {
                 statusItem.button?.title = "REC"
             }
+            AppStateStore.shared.setPaused(false)
         case .paused:
-            pauseItem.title = "Resume"
-            stateItem.title = "Paused"
+            pauseItem.title = "録音開始"
             statusItem.button?.image = NSImage(systemSymbolName: "pause.circle", accessibilityDescription: "Paused")
             if statusItem.button?.image == nil {
                 statusItem.button?.title = "PAUSE"
             }
+            AppStateStore.shared.setPaused(true)
         case .error(let message):
-            pauseItem.title = "Resume"
-            stateItem.title = "Error: \(message)"
+            pauseItem.title = "録音開始"
             statusItem.button?.image = NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: "Error")
             if statusItem.button?.image == nil {
                 statusItem.button?.title = "ERR"
@@ -166,12 +160,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc private func openSettings() {
-        if settingsWindow == nil {
-            settingsWindow = SettingsWindowController(tracker: costTracker, bedrock: bedrockService)
+    @objc private func openDashboard() {
+        if dashboardWindow == nil {
+            dashboardWindow = DashboardWindowController(
+                tracker: costTracker,
+                bedrock: bedrockService,
+                pipeline: pipeline,
+                importer: importer,
+                onToggleRecording: { [weak self] in self?.togglePause() },
+                onImport: { [weak self] in self?.importAudio() },
+                onGenerateDocuments: { [weak self] in self?.generateDocuments() }
+            )
         }
-        settingsWindow?.refresh()
-        settingsWindow?.showWindow(nil)
+        dashboardWindow?.refresh()
+        dashboardWindow?.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 

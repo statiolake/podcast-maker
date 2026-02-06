@@ -39,4 +39,6 @@ extension Notification.Name {
     static let logUpdated = Notification.Name("PodcastMakerLogUpdated")
     static let modelReady = Notification.Name("PodcastMakerModelReady")
     static let queueUpdated = Notification.Name("PodcastMakerQueueUpdated")
+    static let recordingStateChanged = Notification.Name("PodcastMakerRecordingStateChanged")
+    static let transcriptPreviewUpdated = Notification.Name("PodcastMakerTranscriptPreviewUpdated")
 }

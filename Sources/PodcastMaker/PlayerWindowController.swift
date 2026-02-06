@@ -20,13 +20,15 @@ final class PlayerWindowController: NSWindowController {
         self.audioURL = audioURL
         self.metadata = metadata
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 400),
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 520),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
         window.center()
-        window.title = "完成品"
+        window.title = "Podcast"
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
         super.init(window: window)
         setupUI()
         setupPlayer()
@@ -42,7 +44,7 @@ final class PlayerWindowController: NSWindowController {
         window?.delegate = self
 
         titleLabel.stringValue = metadata.title
-        titleLabel.font = NSFont.boldSystemFont(ofSize: 14)
+        titleLabel.font = NSFont.boldSystemFont(ofSize: 16)
 
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
@@ -64,6 +66,8 @@ final class PlayerWindowController: NSWindowController {
 
         playButton.target = self
         playButton.action = #selector(togglePlay)
+        playButton.bezelStyle = .texturedRounded
+        playButton.font = NSFont.systemFont(ofSize: 12, weight: .medium)
 
         seekSlider.target = self
         seekSlider.action = #selector(seekChanged)
@@ -108,13 +112,24 @@ final class PlayerWindowController: NSWindowController {
         scroll.hasVerticalScroller = true
         scroll.translatesAutoresizingMaskIntoConstraints = false
 
-        content.addSubview(scroll)
+        let background = NSVisualEffectView()
+        background.material = .underWindowBackground
+        background.blendingMode = .behindWindow
+        background.state = .active
+        background.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(background)
+        background.addSubview(scroll)
 
         NSLayoutConstraint.activate([
-            scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
-            scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
-            scroll.topAnchor.constraint(equalTo: content.topAnchor, constant: 16),
-            scroll.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16),
+            background.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            background.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            background.topAnchor.constraint(equalTo: content.topAnchor),
+            background.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+
+            scroll.leadingAnchor.constraint(equalTo: background.leadingAnchor, constant: 20),
+            scroll.trailingAnchor.constraint(equalTo: background.trailingAnchor, constant: -20),
+            scroll.topAnchor.constraint(equalTo: background.topAnchor, constant: 20),
+            scroll.bottomAnchor.constraint(equalTo: background.bottomAnchor, constant: -20),
             documentView.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
             documentView.trailingAnchor.constraint(equalTo: scroll.contentView.trailingAnchor),
             documentView.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
@@ -124,7 +139,7 @@ final class PlayerWindowController: NSWindowController {
             stack.trailingAnchor.constraint(equalTo: documentView.trailingAnchor),
             stack.topAnchor.constraint(equalTo: documentView.topAnchor),
             stack.bottomAnchor.constraint(lessThanOrEqualTo: documentView.bottomAnchor),
-            seekSlider.widthAnchor.constraint(greaterThanOrEqualToConstant: 280),
+            seekSlider.widthAnchor.constraint(greaterThanOrEqualToConstant: 320),
             summaryLabelField.widthAnchor.constraint(equalTo: documentView.widthAnchor),
             transcriptLabelField.widthAnchor.constraint(equalTo: documentView.widthAnchor)
         ])
