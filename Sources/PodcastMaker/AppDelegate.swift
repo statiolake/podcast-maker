@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private let audioEngine = AVAudioEngine()
     private let pipeline = AudioPipeline()
+    private let importer = AudioImporter()
     private let costTracker = CostTracker()
     private lazy var bedrockService = BedrockService(tracker: costTracker)
     private var settingsWindow: SettingsWindowController?
@@ -46,6 +47,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         pauseItem.target = self
         menu.addItem(pauseItem)
+
+        let importItem = NSMenuItem(title: "音声ファイルをインポート...", action: #selector(importAudio), keyEquivalent: "i")
+        importItem.target = self
+        menu.addItem(importItem)
 
         let generateItem = NSMenuItem(title: "ドキュメント作成（直近3時間）", action: #selector(generateDocuments), keyEquivalent: "g")
         generateItem.target = self
@@ -179,6 +184,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let recentItem = self?.menu.items.first(where: { $0.title == "完成品（最新10件）" }) {
                 recentItem.submenu = self?.documentsSubmenu
             }
+        }
+    }
+
+    @objc private func importAudio() {
+        let panel = NSOpenPanel()
+        panel.title = "音声ファイルをインポート"
+        panel.message = "WAV または M4A ファイルを選択してください"
+        panel.allowedContentTypes = [.wav, .mpeg4Audio]
+        panel.allowsMultipleSelection = false
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+
+        if panel.runModal() == .OK, let url = panel.url {
+            importer.importFile(url: url, pipeline: pipeline)
         }
     }
 

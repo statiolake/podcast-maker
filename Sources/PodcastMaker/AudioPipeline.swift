@@ -38,23 +38,56 @@ final class AudioPipeline {
 
         let sampleRate = buffer.format.sampleRate
         queue.async { [mono, sampleRate, weak self] in
-            self?.processMonoSamples(mono, sampleRate: sampleRate)
+            self?.processMonoSamples(mono, sampleRate: sampleRate, startTimeOverride: nil)
         }
     }
 
-    private func processMonoSamples(_ mono: [Float], sampleRate: Double) {
-        let duration = Double(mono.count) / sampleRate
-        let endTime = Date().timeIntervalSince1970
-        let startTime = endTime - duration
+    func handleImported(buffer: AVAudioPCMBuffer, startTime: Double) {
+        guard let channelData = buffer.floatChannelData else { return }
+        let channels = Int(buffer.format.channelCount)
+        let frames = Int(buffer.frameLength)
+        if frames == 0 { return }
 
-        if let last = streamTime, startTime - last > 1.0 {
-            streamTime = startTime
+        var mono = [Float](repeating: 0, count: frames)
+        if channels == 1 {
+            mono = Array(UnsafeBufferPointer(start: channelData[0], count: frames))
+        } else {
+            for c in 0..<channels {
+                let channel = channelData[c]
+                for i in 0..<frames {
+                    mono[i] += channel[i]
+                }
+            }
+            let inv = 1.0 / Float(channels)
+            for i in 0..<frames {
+                mono[i] *= inv
+            }
         }
-        if streamTime == nil {
-            streamTime = startTime
+
+        let sampleRate = buffer.format.sampleRate
+        queue.async { [mono, sampleRate, startTime, weak self] in
+            self?.processMonoSamples(mono, sampleRate: sampleRate, startTimeOverride: startTime)
         }
-        let chunkStart = streamTime!
-        streamTime = chunkStart + duration
+    }
+
+    private func processMonoSamples(_ mono: [Float], sampleRate: Double, startTimeOverride: Double?) {
+        let duration = Double(mono.count) / sampleRate
+        let chunkStart: Double
+        if let override = startTimeOverride {
+            chunkStart = override
+        } else {
+            let endTime = Date().timeIntervalSince1970
+            let startTime = endTime - duration
+
+            if let last = streamTime, startTime - last > 1.0 {
+                streamTime = startTime
+            }
+            if streamTime == nil {
+                streamTime = startTime
+            }
+            chunkStart = streamTime!
+            streamTime = chunkStart + duration
+        }
 
         let samples16k = resampleTo16k(mono, sampleRate: sampleRate)
         let now = Date().timeIntervalSince1970
