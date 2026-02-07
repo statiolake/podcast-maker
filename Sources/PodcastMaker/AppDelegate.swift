@@ -18,8 +18,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let costTracker = CostTracker()
     private lazy var bedrockService = BedrockService(tracker: costTracker)
     private var dashboardWindow: DashboardWindowController?
-    private let documentsMenu = RecentDocumentsMenu()
-    private var documentsSubmenu = NSMenu()
     private var isPaused = false
     private var state: AppState = .paused {
         didSet { updateUI() }
@@ -36,6 +34,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupMenu() {
         if let button = statusItem.button {
             button.image = NSImage(systemSymbolName: "pause.circle", accessibilityDescription: "Paused")
+            button.target = self
+            button.action = #selector(handleStatusBarClick(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         } else {
             statusItem.button?.title = "PAUSE"
         }
@@ -43,31 +44,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pauseItem.target = self
         menu.addItem(pauseItem)
 
-        let importItem = NSMenuItem(title: "音声ファイルをインポート...", action: #selector(importAudio), keyEquivalent: "i")
-        importItem.target = self
-        menu.addItem(importItem)
-
-        let dashboardItem = NSMenuItem(title: "ダッシュボード...", action: #selector(openDashboard), keyEquivalent: ",")
+        let dashboardItem = NSMenuItem(title: "ダッシュボード", action: #selector(openDashboard), keyEquivalent: ",")
         dashboardItem.target = self
         menu.addItem(dashboardItem)
 
-        let generateItem = NSMenuItem(title: "ドキュメント作成（直近3時間）", action: #selector(generateDocuments), keyEquivalent: "g")
-        generateItem.target = self
-        menu.addItem(generateItem)
-
-        let recentItem = NSMenuItem(title: "完成品（最新10件）", action: nil, keyEquivalent: "")
-        documentsSubmenu = documentsMenu.buildMenu()
-        recentItem.submenu = documentsSubmenu
-        menu.addItem(recentItem)
-
         menu.addItem(NSMenuItem.separator())
 
-        let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "終了", action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
-
-        statusItem.menu = menu
         updateUI()
+    }
+
+    @objc private func handleStatusBarClick(_ sender: Any?) {
+        guard let event = NSApp.currentEvent else {
+            openDashboard()
+            return
+        }
+        if event.type == .rightMouseUp {
+            statusItem.popUpMenu(menu)
+        } else {
+            openDashboard()
+        }
     }
 
     private func requestMicAccessAndStart() {
@@ -140,7 +138,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 statusItem.button?.title = "PAUSE"
             }
             AppStateStore.shared.setPaused(true)
-        case .error(let message):
+        case .error:
             pauseItem.title = "録音開始"
             statusItem.button?.image = NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: "Error")
             if statusItem.button?.image == nil {
@@ -165,8 +163,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             dashboardWindow = DashboardWindowController(
                 tracker: costTracker,
                 bedrock: bedrockService,
-                pipeline: pipeline,
-                importer: importer,
                 onToggleRecording: { [weak self] in self?.togglePause() },
                 onImport: { [weak self] in self?.importAudio() },
                 onGenerateDocuments: { [weak self] in self?.generateDocuments() }
@@ -182,10 +178,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppLog.shared.add("Document build requested (3h)")
         builder.buildDocuments(hours: 3, profile: costTracker.awsProfile) { [weak self] success in
             AppLog.shared.add(success ? "Document build completed" : "Document build failed")
-            self?.documentsSubmenu = self?.documentsMenu.buildMenu() ?? NSMenu()
-            if let recentItem = self?.menu.items.first(where: { $0.title == "完成品（最新10件）" }) {
-                recentItem.submenu = self?.documentsSubmenu
-            }
+            self?.dashboardWindow?.refresh()
         }
     }
 

@@ -90,10 +90,11 @@ final class AudioPipeline {
         }
 
         let samples16k = resampleTo16k(mono, sampleRate: sampleRate)
+        let rms = computeRMS(samples16k)
+        AudioLevelStore.shared.append(level: rms)
         let now = Date().timeIntervalSince1970
         if now - lastLogTime > 5 {
             lastLogTime = now
-            let rms = computeRMS(samples16k)
             AppLog.shared.add(String(format: "Audio pipeline alive (chunk=%.2fs rms=%.4f)", duration, rms))
         }
         vad.process(samples: samples16k, startTime: chunkStart) { [weak self] segStart, segEnd, samples in

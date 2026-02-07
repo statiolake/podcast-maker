@@ -26,4 +26,8 @@ final class TranscriptPreviewStore {
     func allText() -> String {
         queue.sync { entries.joined(separator: "\n") }
     }
+
+    func lastLine() -> String {
+        queue.sync { entries.last ?? "" }
+    }
 }

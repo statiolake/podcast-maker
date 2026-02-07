@@ -41,4 +41,5 @@ extension Notification.Name {
     static let queueUpdated = Notification.Name("PodcastMakerQueueUpdated")
     static let recordingStateChanged = Notification.Name("PodcastMakerRecordingStateChanged")
     static let transcriptPreviewUpdated = Notification.Name("PodcastMakerTranscriptPreviewUpdated")
+    static let audioLevelUpdated = Notification.Name("PodcastMakerAudioLevelUpdated")
 }
