@@ -120,3 +120,5 @@ final class BedrockService {
         return Smithy.Document(root)
     }
 }
+
+extension BedrockService: @unchecked Sendable {}

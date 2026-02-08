@@ -1,6 +1,16 @@
 import Cocoa
 import AVFoundation
 
+private func makeAudioTapHandler(pipeline: AudioPipeline) -> @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void {
+    return { buffer, _ in
+        if AppStateStore.shared.isPaused {
+            return
+        }
+        pipeline.handle(buffer: buffer)
+    }
+}
+
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private enum AppState {
         case recording
@@ -62,7 +72,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         if event.type == .rightMouseUp {
-            statusItem.popUpMenu(menu)
+            guard let button = statusItem.button else { return }
+            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
         } else {
             openDashboard()
         }
@@ -95,15 +106,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let input = audioEngine.inputNode
         let inputFormat = input.inputFormat(forBus: 0)
         let bufferSize: AVAudioFrameCount = 1024
+        let tapHandler = makeAudioTapHandler(pipeline: pipeline)
 
         input.removeTap(onBus: 0)
-        input.installTap(onBus: 0, bufferSize: bufferSize, format: inputFormat) { [weak self] buffer, _ in
-            guard let self else { return }
-            if self.isPaused {
-                return
-            }
-            self.pipeline.handle(buffer: buffer)
-        }
+        input.installTap(onBus: 0, bufferSize: bufferSize, format: inputFormat, block: tapHandler)
 
         do {
             try audioEngine.start()
@@ -177,8 +183,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let builder = DocumentBuilder(bedrock: bedrockService)
         AppLog.shared.add("Document build requested (3h)")
         builder.buildDocuments(hours: 3, profile: costTracker.awsProfile) { [weak self] success in
-            AppLog.shared.add(success ? "Document build completed" : "Document build failed")
-            self?.dashboardWindow?.refresh()
+            Task { @MainActor [weak self] in
+                AppLog.shared.add(success ? "Document build completed" : "Document build failed")
+                self?.dashboardWindow?.refresh()
+            }
         }
     }
 

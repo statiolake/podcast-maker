@@ -31,3 +31,5 @@ final class TranscriptPreviewStore {
         queue.sync { entries.last ?? "" }
     }
 }
+
+extension TranscriptPreviewStore: @unchecked Sendable {}

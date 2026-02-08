@@ -25,3 +25,5 @@ final class AudioLevelStore {
         queue.sync { levels }
     }
 }
+
+extension AudioLevelStore: @unchecked Sendable {}

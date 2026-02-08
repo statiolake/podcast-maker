@@ -59,3 +59,5 @@ final class CostTracker {
         return inputCost + outputCost + cache5mCost + cache1hCost + cacheHitCost
     }
 }
+
+extension CostTracker: @unchecked Sendable {}

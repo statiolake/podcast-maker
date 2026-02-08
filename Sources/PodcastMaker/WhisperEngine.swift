@@ -75,6 +75,8 @@ final class WhisperASRWorker {
     }
 }
 
+extension WhisperASRWorker: @unchecked Sendable {}
+
 final class WhisperEngine {
     private var ctx: OpaquePointer?
     private let timeScale: Double = 0.01

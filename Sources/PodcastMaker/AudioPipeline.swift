@@ -1,6 +1,6 @@
 import AVFoundation
 
-final class AudioPipeline {
+final class AudioPipeline: @unchecked Sendable {
     private let queue = DispatchQueue(label: "audio.pipeline")
     private let storage = SegmentStorage()
     private let vad = VADSegmenter()

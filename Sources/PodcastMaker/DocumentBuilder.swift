@@ -1,6 +1,6 @@
 import Foundation
 
-final class DocumentBuilder {
+final class DocumentBuilder: @unchecked Sendable {
     private let aggregator = TranscriptAggregator()
     private let store = DocumentStore()
     private let merger = AudioMerger()
@@ -10,12 +10,12 @@ final class DocumentBuilder {
         self.bedrock = bedrock
     }
 
-    func buildDocuments(hours: Double, profile: String, completion: @escaping (Bool) -> Void) {
+    func buildDocuments(hours: Double, profile: String, completion: @Sendable @escaping (Bool) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             let segments = self.aggregator.loadRecentSegments(hours: hours)
             if segments.isEmpty {
                 AppLog.shared.add("No transcripts in last \(Int(hours))h")
-                DispatchQueue.main.async { completion(false) }
+                Task { @MainActor in completion(false) }
                 return
             }
 
@@ -67,10 +67,10 @@ final class DocumentBuilder {
                         _ = self.store.saveDocument(title: topic.title, audioData: audio, metadata: metadata)
                     }
 
-                    DispatchQueue.main.async { completion(true) }
+                    await MainActor.run { completion(true) }
                 } catch {
                     AppLog.shared.add("Bedrock segmentation failed: \(error.localizedDescription)")
-                    DispatchQueue.main.async { completion(false) }
+                    await MainActor.run { completion(false) }
                 }
             }
         }

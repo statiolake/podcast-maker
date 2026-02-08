@@ -1,6 +1,6 @@
 import AVFoundation
 
-final class AudioImporter {
+final class AudioImporter: @unchecked Sendable {
     private let queue = DispatchQueue(label: "audio.import")
 
     func importFile(url: URL, pipeline: AudioPipeline) {

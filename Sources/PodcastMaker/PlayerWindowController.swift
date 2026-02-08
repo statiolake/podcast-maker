@@ -1,187 +1,130 @@
 import Cocoa
 import AVFoundation
+import SwiftUI
 
 final class PlayerWindowController: NSWindowController {
-    private let audioURL: URL
-    private let metadata: DocumentMetadata
-    private var player: AVAudioPlayer?
-    private var timer: Timer?
-
-    private let titleLabel = NSTextField(labelWithString: "")
-    private let timeLabel = NSTextField(labelWithString: "")
-    private let summaryLabelField = NSTextField(labelWithString: "")
-    private let transcriptLabelField = NSTextField(labelWithString: "")
-    private let playButton = NSButton(title: "再生", target: nil, action: nil)
-    private let seekSlider = NSSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
-    private let currentTimeLabel = NSTextField(labelWithString: "00:00")
-    private let durationLabel = NSTextField(labelWithString: "00:00")
+    private let viewModel: PlayerViewModel
 
     init(audioURL: URL, metadata: DocumentMetadata) {
-        self.audioURL = audioURL
-        self.metadata = metadata
+        viewModel = PlayerViewModel(audioURL: audioURL, metadata: metadata)
+        let rootView = PlayerRootView(viewModel: viewModel)
+        let hosting = NSHostingController(rootView: rootView)
+
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 520),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 760, height: 620),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.center()
         window.title = "Podcast"
-        window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
+        window.toolbarStyle = .unified
+        window.minSize = NSSize(width: 680, height: 520)
+        window.contentViewController = hosting
+
         super.init(window: window)
-        setupUI()
-        setupPlayer()
+        window.delegate = self
+        viewModel.preparePlayer()
     }
 
     required init?(coder: NSCoder) {
         return nil
     }
+}
 
-    private func setupUI() {
-        guard let content = window?.contentView else { return }
+@MainActor
+final class PlayerViewModel: NSObject, ObservableObject {
+    let title: String
+    let timeRange: String
+    let summary: String
+    let transcript: String
 
-        window?.delegate = self
+    @Published var isPlaying = false
+    @Published var currentTime: Double = 0
+    @Published var duration: Double = 0
 
-        titleLabel.stringValue = metadata.title
-        titleLabel.font = NSFont.boldSystemFont(ofSize: 16)
+    private let audioURL: URL
+    private var player: AVAudioPlayer?
+    private var timer: Timer?
+
+    init(audioURL: URL, metadata: DocumentMetadata) {
+        self.audioURL = audioURL
+        self.title = metadata.title
 
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         let start = Date(timeIntervalSince1970: metadata.startTime)
         let end = Date(timeIntervalSince1970: metadata.endTime)
-        timeLabel.stringValue = "\(formatter.string(from: start)) 〜 \(formatter.string(from: end))"
-        timeLabel.textColor = .secondaryLabelColor
+        self.timeRange = "\(formatter.string(from: start)) 〜 \(formatter.string(from: end))"
 
-        summaryLabelField.font = NSFont.systemFont(ofSize: 12)
-        summaryLabelField.lineBreakMode = .byWordWrapping
-        summaryLabelField.maximumNumberOfLines = 0
-        summaryLabelField.stringValue = metadata.summary
-
-        transcriptLabelField.font = NSFont.systemFont(ofSize: 12)
-        transcriptLabelField.lineBreakMode = .byWordWrapping
-        transcriptLabelField.maximumNumberOfLines = 0
-        transcriptLabelField.stringValue = sanitizedTranscript(metadata.formattedTranscript.isEmpty ? metadata.transcript : metadata.formattedTranscript)
-
-        playButton.target = self
-        playButton.action = #selector(togglePlay)
-        playButton.bezelStyle = .texturedRounded
-        playButton.font = NSFont.systemFont(ofSize: 12, weight: .medium)
-
-        seekSlider.target = self
-        seekSlider.action = #selector(seekChanged)
-        seekSlider.isContinuous = true
-
-        currentTimeLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-        durationLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-        currentTimeLabel.textColor = .secondaryLabelColor
-        durationLabel.textColor = .secondaryLabelColor
-
-        let playRow = NSStackView(views: [playButton, currentTimeLabel, seekSlider, durationLabel])
-        playRow.orientation = .horizontal
-        playRow.alignment = .centerY
-        playRow.spacing = 8
-        playRow.translatesAutoresizingMaskIntoConstraints = false
-
-        let summaryLabel = NSTextField(labelWithString: "要約")
-        summaryLabel.font = NSFont.boldSystemFont(ofSize: 12)
-        let transcriptLabel = NSTextField(labelWithString: "文字起こし")
-        transcriptLabel.font = NSFont.boldSystemFont(ofSize: 12)
-
-        let stack = NSStackView(views: [
-            titleLabel,
-            timeLabel,
-            playRow,
-            summaryLabel,
-            summaryLabelField,
-            transcriptLabel,
-            transcriptLabelField
-        ])
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 8
-        stack.translatesAutoresizingMaskIntoConstraints = false
-
-        let documentView = NSView()
-        documentView.translatesAutoresizingMaskIntoConstraints = false
-        documentView.addSubview(stack)
-
-        let scroll = NSScrollView()
-        scroll.documentView = documentView
-        scroll.hasVerticalScroller = true
-        scroll.translatesAutoresizingMaskIntoConstraints = false
-
-        let background = NSVisualEffectView()
-        background.material = .underWindowBackground
-        background.blendingMode = .behindWindow
-        background.state = .active
-        background.translatesAutoresizingMaskIntoConstraints = false
-        content.addSubview(background)
-        background.addSubview(scroll)
-
-        NSLayoutConstraint.activate([
-            background.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            background.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            background.topAnchor.constraint(equalTo: content.topAnchor),
-            background.bottomAnchor.constraint(equalTo: content.bottomAnchor),
-
-            scroll.leadingAnchor.constraint(equalTo: background.leadingAnchor, constant: 20),
-            scroll.trailingAnchor.constraint(equalTo: background.trailingAnchor, constant: -20),
-            scroll.topAnchor.constraint(equalTo: background.topAnchor, constant: 20),
-            scroll.bottomAnchor.constraint(equalTo: background.bottomAnchor, constant: -20),
-            documentView.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
-            documentView.trailingAnchor.constraint(equalTo: scroll.contentView.trailingAnchor),
-            documentView.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
-            documentView.bottomAnchor.constraint(equalTo: scroll.contentView.bottomAnchor),
-
-            stack.leadingAnchor.constraint(equalTo: documentView.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: documentView.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: documentView.topAnchor),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: documentView.bottomAnchor),
-            seekSlider.widthAnchor.constraint(greaterThanOrEqualToConstant: 320),
-            summaryLabelField.widthAnchor.constraint(equalTo: documentView.widthAnchor),
-            transcriptLabelField.widthAnchor.constraint(equalTo: documentView.widthAnchor)
-        ])
+        self.summary = metadata.summary
+        self.transcript = PlayerViewModel.sanitizedTranscript(
+            metadata.formattedTranscript.isEmpty ? metadata.transcript : metadata.formattedTranscript
+        )
     }
 
-    private func setupPlayer() {
+    func preparePlayer() {
         do {
             player = try AVAudioPlayer(contentsOf: audioURL)
             player?.prepareToPlay()
-            if let duration = player?.duration {
-                seekSlider.maxValue = duration
-                durationLabel.stringValue = formatTime(duration)
-            }
+            duration = player?.duration ?? 0
+            currentTime = 0
         } catch {
             AppLog.shared.add("Audio player failed: \(error.localizedDescription)")
         }
     }
 
-    @objc private func togglePlay() {
+    func togglePlay() {
         guard let player else { return }
         if player.isPlaying {
-            player.pause()
-            playButton.title = "再生"
-            stopTimer()
+            pause()
         } else {
             player.play()
-            playButton.title = "停止"
+            isPlaying = true
             startTimer()
         }
     }
 
-    @objc private func seekChanged() {
+    func seek(to value: Double) {
         guard let player else { return }
-        player.currentTime = seekSlider.doubleValue
-        currentTimeLabel.stringValue = formatTime(player.currentTime)
+        player.currentTime = value
+        currentTime = value
+    }
+
+    func stop() {
+        player?.stop()
+        isPlaying = false
+        stopTimer()
+        currentTime = 0
+    }
+
+    func pause() {
+        player?.pause()
+        isPlaying = false
+        stopTimer()
+    }
+
+    var currentTimeText: String {
+        Self.formatTime(currentTime)
+    }
+
+    var durationText: String {
+        Self.formatTime(duration)
+    }
+
+    var canSeek: Bool {
+        duration > 0
     }
 
     private func startTimer() {
         stopTimer()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
-            self?.updatePlaybackUI()
-        }
+        timer = Timer.scheduledTimer(timeInterval: 0.2,
+                                     target: self,
+                                     selector: #selector(handleTimer),
+                                     userInfo: nil,
+                                     repeats: true)
     }
 
     private func stopTimer() {
@@ -189,35 +132,117 @@ final class PlayerWindowController: NSWindowController {
         timer = nil
     }
 
-    private func updatePlaybackUI() {
+    @objc private func handleTimer() {
         guard let player else { return }
-        seekSlider.doubleValue = player.currentTime
-        currentTimeLabel.stringValue = formatTime(player.currentTime)
+        currentTime = player.currentTime
         if !player.isPlaying {
-            playButton.title = "再生"
+            isPlaying = false
             stopTimer()
         }
     }
 
-    private func formatTime(_ seconds: Double) -> String {
+    private static func formatTime(_ seconds: Double) -> String {
         let total = Int(seconds)
         let mins = total / 60
         let secs = total % 60
         return String(format: "%02d:%02d", mins, secs)
     }
 
-    private func sanitizedTranscript(_ text: String) -> String {
-        let lines = text
+    private static func sanitizedTranscript(_ text: String) -> String {
+        text
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty && $0 != "[BLANK_AUDIO]" }
-        return lines.joined(separator: "\n")
+            .joined(separator: "\n")
+    }
+}
+
+struct PlayerRootView: View {
+    @ObservedObject var viewModel: PlayerViewModel
+
+    private enum Layout {
+        static let outerPadding: CGFloat = 16
+        // Form has built-in system insets; we counter with negative padding.
+        static let formHorizontalTrim: CGFloat = 16
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(viewModel.title)
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                Text(viewModel.timeRange)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            Form {
+                Section {
+                    HStack(spacing: 8) {
+                        Button {
+                            viewModel.togglePlay()
+                        } label: {
+                            Image(systemName: viewModel.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 13, weight: .bold))
+                                .frame(width: 18, height: 18)
+                        }
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.circle)
+                        .controlSize(.large)
+                        .help(viewModel.isPlaying ? "一時停止" : "再生")
+
+                        Text(viewModel.currentTimeText)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 44, alignment: .trailing)
+
+                        Slider(
+                            value: Binding(
+                                get: { viewModel.currentTime },
+                                set: { viewModel.seek(to: $0) }
+                            ),
+                            in: 0...max(viewModel.duration, 1)
+                        )
+                        .disabled(!viewModel.canSeek)
+                        .frame(maxWidth: .infinity)
+
+                        Text(viewModel.durationText)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 44, alignment: .leading)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                Section("要約") {
+                    Text(viewModel.summary.isEmpty ? "（要約なし）" : viewModel.summary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                Section("文字起こし") {
+                    if viewModel.transcript.isEmpty {
+                        Text("（文字起こしなし）")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(viewModel.transcript)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            .padding(.top, 0)
+            .padding(.horizontal, -Layout.formHorizontalTrim)
+        }
+        .padding(Layout.outerPadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
 extension PlayerWindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
-        player?.stop()
-        stopTimer()
+        viewModel.stop()
     }
 }

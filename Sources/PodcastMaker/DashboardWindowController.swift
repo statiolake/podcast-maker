@@ -22,16 +22,20 @@ final class DashboardWindowController: NSWindowController {
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1240, height: 820),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.center()
-        window.title = "PodcastMaker"
-        window.minSize = NSSize(width: 1080, height: 700)
-        window.toolbarStyle = .unified
+        window.title = ""
         window.titlebarAppearsTransparent = true
-        window.isMovableByWindowBackground = true
+        window.titlebarSeparatorStyle = .none
+        window.toolbarStyle = .unified
+        let toolbar = NSToolbar(identifier: "dashboard-toolbar")
+        toolbar.allowsUserCustomization = false
+        toolbar.autosavesConfiguration = false
+        window.toolbar = toolbar
+        window.minSize = NSSize(width: 1080, height: 700)
         window.contentViewController = hosting
 
         super.init(window: window)
@@ -77,6 +81,11 @@ struct DocumentRow: Identifiable {
     let id: URL
     let url: URL
     let displayTitle: String
+    let metadata: DocumentMetadata
+
+    var audioURL: URL {
+        url.appendingPathComponent("audio.wav")
+    }
 }
 
 @MainActor
@@ -103,8 +112,6 @@ final class DashboardViewModel: ObservableObject {
     private let onGenerateDocuments: () -> Void
     private let store = DocumentStore()
 
-    private var playerWindow: PlayerWindowController?
-
     init(tracker: CostTracker,
          bedrock: BedrockService,
          onToggleRecording: @escaping () -> Void,
@@ -121,7 +128,9 @@ final class DashboardViewModel: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.isPaused = AppStateStore.shared.isPaused
+            Task { @MainActor [weak self] in
+                self?.isPaused = AppStateStore.shared.isPaused
+            }
         }
 
         NotificationCenter.default.addObserver(
@@ -129,7 +138,9 @@ final class DashboardViewModel: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.transcriptLine = TranscriptPreviewStore.shared.lastLine()
+            Task { @MainActor [weak self] in
+                self?.transcriptLine = TranscriptPreviewStore.shared.lastLine()
+            }
         }
 
         NotificationCenter.default.addObserver(
@@ -137,7 +148,9 @@ final class DashboardViewModel: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.levels = AudioLevelStore.shared.snapshot()
+            Task { @MainActor [weak self] in
+                self?.levels = AudioLevelStore.shared.snapshot()
+            }
         }
 
         NotificationCenter.default.addObserver(
@@ -145,7 +158,9 @@ final class DashboardViewModel: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.logs = AppLog.shared.allText()
+            Task { @MainActor [weak self] in
+                self?.logs = AppLog.shared.allText()
+            }
         }
 
         NotificationCenter.default.addObserver(
@@ -153,7 +168,9 @@ final class DashboardViewModel: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.refreshModelState()
+            Task { @MainActor [weak self] in
+                self?.refreshModelState()
+            }
         }
 
         refreshAll()
@@ -193,16 +210,8 @@ final class DashboardViewModel: ObservableObject {
             let start = formatter.string(from: Date(timeIntervalSince1970: metadata.startTime))
             let end = formatter.string(from: Date(timeIntervalSince1970: metadata.endTime)).split(separator: " ").last ?? ""
             let title = "\(metadata.title) (\(start) 〜 \(end))"
-            return DocumentRow(id: folder, url: folder, displayTitle: title)
+            return DocumentRow(id: folder, url: folder, displayTitle: title, metadata: metadata)
         }
-    }
-
-    func openDocument(_ row: DocumentRow) {
-        let audioURL = row.url.appendingPathComponent("audio.wav")
-        guard let metadata = store.loadMetadata(at: row.url) else { return }
-        playerWindow = PlayerWindowController(audioURL: audioURL, metadata: metadata)
-        playerWindow?.showWindow(nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     func saveProfile() {
@@ -213,7 +222,7 @@ final class DashboardViewModel: ObservableObject {
     func testBedrock() {
         bedrockStatus = "接続中..."
         let profile = awsProfile
-        Task {
+        Task { @MainActor in
             do {
                 _ = try await bedrock.test(prompt: "Say hello in Japanese.", profile: profile)
                 bedrockStatus = "接続成功"
@@ -259,28 +268,35 @@ struct DashboardRootView: View {
     @ObservedObject var viewModel: DashboardViewModel
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: .constant(.all)) {
             List(DashboardSection.allCases, selection: $viewModel.selectedSection) { section in
                 Label(section.title, systemImage: section.symbol)
-                    .font(.system(size: 13, weight: .medium))
-                    .padding(.vertical, 4)
                     .tag(section)
             }
             .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 240, ideal: 270)
+            .navigationTitle("PodcastMaker")
+            .navigationSplitViewColumnWidth(min: 220, ideal: 250)
         } detail: {
-            switch viewModel.selectedSection ?? .recording {
-            case .recording:
-                RecordingDashboardView(viewModel: viewModel)
-            case .podcast:
-                PodcastDashboardView(viewModel: viewModel)
-            case .settings:
-                SettingsDashboardView(viewModel: viewModel)
-            case .logs:
-                LogsDashboardView(viewModel: viewModel)
-            }
+            detailView
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .navigationSplitViewStyle(.balanced)
+        .toolbar(removing: .sidebarToggle)
         .frame(minWidth: 1080, minHeight: 700)
+    }
+
+    @ViewBuilder
+    private var detailView: some View {
+        switch viewModel.selectedSection ?? .recording {
+        case .recording:
+            RecordingDashboardView(viewModel: viewModel)
+        case .podcast:
+            PodcastDashboardView(viewModel: viewModel)
+        case .settings:
+            SettingsDashboardView(viewModel: viewModel)
+        case .logs:
+            LogsDashboardView(viewModel: viewModel)
+        }
     }
 }
 
@@ -289,51 +305,41 @@ struct RecordingDashboardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("録音")
-                .font(.system(size: 30, weight: .bold))
-
-            Text(viewModel.isPaused ? "現在: 一時停止中" : "現在: 録音中")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 12) {
+            HStack {
+                Text("録音")
+                    .font(.largeTitle)
+                Spacer()
                 Button(viewModel.isPaused ? "録音開始" : "一時停止") {
                     viewModel.toggleRecording()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-
                 Button("音声ファイルをインポート...") {
                     viewModel.importAudio()
                 }
                 .buttonStyle(.bordered)
             }
 
-            WaveformCanvas(levels: viewModel.levels)
-                .frame(height: 250)
-                .background(.regularMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(.quaternary, lineWidth: 1)
+            GroupBox("状態") {
+                LabeledContent("録音") {
+                    Text(viewModel.isPaused ? "一時停止中" : "録音中")
                 }
+                LabeledContent("ライブ文字起こし") {
+                    Text(viewModel.transcriptLine.isEmpty ? "待機中" : viewModel.transcriptLine)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.trailing)
+                        .foregroundStyle(viewModel.transcriptLine.isEmpty ? .secondary : .primary)
+                }
+            }
 
-            Text(viewModel.transcriptLine.isEmpty ? "..." : viewModel.transcriptLine)
-                .font(.system(size: 18, weight: .medium))
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .background(.regularMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(.quaternary, lineWidth: 1)
-                }
+            GroupBox("入力レベル") {
+                WaveformCanvas(levels: viewModel.levels)
+                    .frame(height: 220)
+            }
 
             Spacer()
         }
-        .padding(28)
+        .padding(24)
     }
 }
 
@@ -365,36 +371,104 @@ struct WaveformCanvas: View {
                 }
             }
 
-            let stroke = Color.accentColor.opacity(0.9)
-            context.stroke(top, with: .color(stroke), lineWidth: 2)
-            context.stroke(bottom, with: .color(stroke), lineWidth: 2)
+            context.stroke(top, with: .color(.accentColor), lineWidth: 2)
+            context.stroke(bottom, with: .color(.accentColor), lineWidth: 2)
         }
     }
 }
 
 struct PodcastDashboardView: View {
     @ObservedObject var viewModel: DashboardViewModel
+    @State private var selection: URL?
+    @State private var playerViewModel: PlayerViewModel?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Podcast")
-                .font(.system(size: 30, weight: .bold))
-
-            Button("Podcast を作成（直近3時間）") {
-                viewModel.generatePodcast()
+            HStack {
+                Text("Podcast")
+                    .font(.largeTitle)
+                Spacer()
+                Button("Podcast を作成（直近3時間）") {
+                    viewModel.generatePodcast()
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .buttonStyle(.borderedProminent)
 
-            List(viewModel.documents) { row in
-                Text(row.displayTitle)
-                    .lineLimit(1)
-                    .onTapGesture(count: 2) {
-                        viewModel.openDocument(row)
+            HSplitView {
+                if viewModel.documents.isEmpty {
+                    ContentUnavailableView("まだPodcastがありません", systemImage: "music.note")
+                        .frame(minWidth: 280, maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(viewModel.documents, selection: $selection) { row in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.metadata.title)
+                                .font(.body)
+                                .fontWeight(.medium)
+                                .lineLimit(1)
+                            Text(row.displayTitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        .tag(row.id)
                     }
+                    .listStyle(.inset)
+                    .frame(minWidth: 290, idealWidth: 320, maxWidth: 360)
+                }
+
+                if let playerViewModel {
+                    PlayerRootView(viewModel: playerViewModel)
+                        .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ContentUnavailableView("Podcastを選択してください", systemImage: "play.square")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
-            .listStyle(.inset)
         }
-        .padding(28)
+        .padding(24)
+        .onAppear {
+            syncSelectionWithDocuments()
+        }
+        .onDisappear {
+            playerViewModel?.stop()
+        }
+        .onChange(of: viewModel.documents.map(\.id)) {
+            syncSelectionWithDocuments()
+        }
+        .onChange(of: selection) {
+            rebuildPlayer()
+        }
+    }
+
+    private func syncSelectionWithDocuments() {
+        guard !viewModel.documents.isEmpty else {
+            playerViewModel?.stop()
+            playerViewModel = nil
+            selection = nil
+            return
+        }
+
+        if let selection, viewModel.documents.contains(where: { $0.id == selection }) {
+            rebuildPlayer()
+            return
+        }
+
+        self.selection = viewModel.documents[0].id
+        rebuildPlayer()
+    }
+
+    private func rebuildPlayer() {
+        guard let selection,
+              let row = viewModel.documents.first(where: { $0.id == selection }) else {
+            playerViewModel?.stop()
+            playerViewModel = nil
+            return
+        }
+
+        playerViewModel?.stop()
+        let model = PlayerViewModel(audioURL: row.audioURL, metadata: row.metadata)
+        model.preparePlayer()
+        playerViewModel = model
     }
 }
 
@@ -402,45 +476,58 @@ struct SettingsDashboardView: View {
     @ObservedObject var viewModel: DashboardViewModel
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("設定")
-                    .font(.system(size: 30, weight: .bold))
-
-                GroupBox("Bedrock") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("AWS_PROFILE")
-                            .font(.system(size: 12, weight: .medium))
+        Form {
+            Section("Amazon Bedrock") {
+                LabeledContent("AWS Profile") {
+                    HStack(spacing: 8) {
                         TextField("default", text: $viewModel.awsProfile)
                             .textFieldStyle(.roundedBorder)
-                            .onSubmit {
-                                viewModel.saveProfile()
-                            }
-                        Text(viewModel.bedrockStatus)
-                            .foregroundStyle(.secondary)
-                        Text(viewModel.tokenSummary)
-                            .foregroundStyle(.secondary)
-                        Button("接続テスト") {
-                            viewModel.testBedrock()
+                            .frame(width: 220)
+                        Button("保存") {
+                            viewModel.saveProfile()
                         }
                         .buttonStyle(.bordered)
                     }
-                    .padding(.top, 4)
                 }
 
-                GroupBox("Whisper モデル") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("パス: \(viewModel.modelPath)")
-                        Text(viewModel.modelState)
-                        Text(viewModel.queueState)
-                        Text(viewModel.downloadState)
+                LabeledContent("接続状態") {
+                    Text(viewModel.bedrockStatus)
+                }
+
+                LabeledContent("トークン使用量") {
+                    Text(viewModel.tokenSummary)
+                        .multilineTextAlignment(.trailing)
+                }
+
+                HStack {
+                    Spacer()
+                    Button("接続テスト") {
+                        viewModel.testBedrock()
                     }
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 4)
+                    .buttonStyle(.borderedProminent)
                 }
             }
-            .padding(28)
+
+            Section("Whisper") {
+                LabeledContent("モデルパス") {
+                    Text(viewModel.modelPath)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.trailing)
+                        .textSelection(.enabled)
+                }
+                LabeledContent("モデル状態") {
+                    Text(viewModel.modelState)
+                }
+                LabeledContent("待ちキュー") {
+                    Text(viewModel.queueState)
+                }
+                LabeledContent("ダウンロード") {
+                    Text(viewModel.downloadState)
+                }
+            }
         }
+        .formStyle(.grouped)
+        .padding(16)
     }
 }
 
@@ -451,31 +538,26 @@ struct LogsDashboardView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("ログ")
-                    .font(.system(size: 30, weight: .bold))
+                    .font(.largeTitle)
                 Spacer()
-                Button {
+                Button("コピー") {
                     viewModel.copyLogs()
-                } label: {
-                    Image(systemName: "doc.on.doc")
                 }
                 .buttonStyle(.bordered)
             }
 
-            ScrollView {
-                Text(viewModel.logs)
-                    .font(.system(size: 11, weight: .regular, design: .monospaced))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-                    .padding(12)
+            GroupBox {
+                ScrollView {
+                    Text(viewModel.logs)
+                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                        .padding(8)
+                }
             }
-            .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(.quaternary, lineWidth: 1)
-            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .padding(28)
+        .padding(24)
     }
 }
 
@@ -499,3 +581,5 @@ final class AppStateStore {
         queue.sync { paused }
     }
 }
+
+extension AppStateStore: @unchecked Sendable {}
