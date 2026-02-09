@@ -374,9 +374,6 @@ struct SettingsDashboardView<ViewModel: DashboardViewModeling>: View {
                     LabeledContent("待ちキュー") {
                         Text(viewModel.queueState)
                     }
-                    LabeledContent("ダウンロード") {
-                        Text(viewModel.downloadState)
-                    }
                 }
             }
             .formStyle(.grouped)
@@ -495,9 +492,8 @@ private enum DashboardPreviewFactory {
         viewModel.awsProfile = "default"
         viewModel.profileSourcePath = "~/.aws/config"
         viewModel.modelPath = "/Users/dicen/Library/Application Support/PodcastMaker/models/ggml-small.bin"
-        viewModel.modelState = "状態: 準備完了"
-        viewModel.queueState = "待ちキュー: 1"
-        viewModel.downloadState = "ダウンロード: 停止"
+        viewModel.modelState = "準備完了"
+        viewModel.queueState = "1"
 
         return viewModel
     }
@@ -518,9 +514,8 @@ private final class PreviewDashboardViewModel: DashboardViewModeling {
     @Published var bedrockStatus = "待機中"
     @Published var tokenSummary = ""
     @Published var modelPath = "未準備"
-    @Published var modelState = "状態: 未準備"
-    @Published var queueState = "待ちキュー: 0"
-    @Published var downloadState = "ダウンロード: 停止"
+    @Published var modelState = "未準備"
+    @Published var queueState = "0"
 
     func refreshAll() {}
     func toggleRecording() { isPaused.toggle() }

@@ -19,7 +19,6 @@ protocol DashboardViewModeling: ObservableObject {
     var modelPath: String { get set }
     var modelState: String { get set }
     var queueState: String { get set }
-    var downloadState: String { get set }
 
     func refreshAll()
     func toggleRecording()
@@ -47,9 +46,8 @@ final class DashboardViewModel: ObservableObject {
     @Published var bedrockStatus = "待機中"
     @Published var tokenSummary = ""
     @Published var modelPath = "未準備"
-    @Published var modelState = "状態: 未準備"
-    @Published var queueState = "待ちキュー: 0"
-    @Published var downloadState = "ダウンロード: 停止"
+    @Published var modelState = "未準備"
+    @Published var queueState = "0"
 
     private let tracker: CostTracker
     private let bedrock: BedrockService
@@ -222,13 +220,15 @@ final class DashboardViewModel: ObservableObject {
         let status = WhisperASRWorker.shared.queueStatus()
         let progress = ModelManager.shared.status()
         modelPath = ModelManager.shared.modelPath() ?? "未準備"
-        modelState = "状態: \(status.modelReady ? "準備完了" : "未準備")"
-        queueState = "待ちキュー: \(status.pending)"
+        queueState = "\(status.pending)"
+
         if progress.expectedBytes > 0 {
             let percent = Int((Double(progress.downloadedBytes) / Double(progress.expectedBytes)) * 100.0)
-            downloadState = "ダウンロード: \(percent)%"
+            modelState = "ダウンロード中 \(percent)%"
+        } else if progress.downloading {
+            modelState = "ダウンロード中"
         } else {
-            downloadState = "ダウンロード: \(progress.downloading ? "進行中" : "停止")"
+            modelState = status.modelReady ? "準備完了" : "未準備"
         }
     }
 }
