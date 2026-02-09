@@ -38,7 +38,7 @@ final class DashboardWindowController: NSWindowController {
         toolbar.allowsUserCustomization = false
         toolbar.autosavesConfiguration = false
         window.toolbar = toolbar
-        window.minSize = NSSize(width: 1080, height: 700)
+        window.minSize = NSSize(width: 810, height: 525)
         window.contentViewController = hosting
 
         super.init(window: window)
