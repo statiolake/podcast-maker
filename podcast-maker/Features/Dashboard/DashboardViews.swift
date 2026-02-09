@@ -19,7 +19,7 @@ struct DashboardRootView<ViewModel: DashboardViewModeling>: View {
         }
         .navigationSplitViewStyle(.balanced)
         .toolbar(removing: .sidebarToggle)
-        .frame(minWidth: 810, minHeight: 525)
+        .frame(minWidth: 1080, minHeight: 700)
     }
 
     @ViewBuilder
