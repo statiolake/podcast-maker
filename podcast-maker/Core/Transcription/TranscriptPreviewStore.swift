@@ -30,6 +30,13 @@ final class TranscriptPreviewStore {
     func lastLine() -> String {
         queue.sync { entries.last ?? "" }
     }
+
+    func recentLines(limit: Int) -> [String] {
+        guard limit > 0 else { return [] }
+        return queue.sync {
+            Array(entries.suffix(limit))
+        }
+    }
 }
 
 extension TranscriptPreviewStore: @unchecked Sendable {}

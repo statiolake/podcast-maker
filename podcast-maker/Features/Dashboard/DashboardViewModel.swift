@@ -7,6 +7,7 @@ protocol DashboardViewModeling: ObservableObject {
     var selectedSection: DashboardSection? { get set }
     var isPaused: Bool { get set }
     var transcriptLine: String { get set }
+    var transcriptPreviewLines: [String] { get set }
     var levels: [Float] { get set }
     var documents: [DocumentRow] { get set }
     var logs: String { get set }
@@ -35,6 +36,7 @@ final class DashboardViewModel: ObservableObject {
     @Published var selectedSection: DashboardSection? = .recording
     @Published var isPaused = true
     @Published var transcriptLine = ""
+    @Published var transcriptPreviewLines: [String] = []
     @Published var levels: [Float] = []
     @Published var documents: [DocumentRow] = []
     @Published var logs = ""
@@ -83,6 +85,7 @@ final class DashboardViewModel: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             self?.transcriptLine = TranscriptPreviewStore.shared.lastLine()
+            self?.transcriptPreviewLines = TranscriptPreviewStore.shared.recentLines(limit: 3)
         }
 
         NotificationCenter.default.addObserver(
@@ -116,6 +119,7 @@ final class DashboardViewModel: ObservableObject {
         reloadProfiles()
         isPaused = AppStateStore.shared.isPaused
         transcriptLine = TranscriptPreviewStore.shared.lastLine()
+        transcriptPreviewLines = TranscriptPreviewStore.shared.recentLines(limit: 3)
         levels = AudioLevelStore.shared.snapshot()
         logs = AppLog.shared.allText()
         refreshDocuments()

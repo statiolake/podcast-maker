@@ -40,41 +40,88 @@ struct DashboardRootView<ViewModel: DashboardViewModeling>: View {
 struct RecordingDashboardView<ViewModel: DashboardViewModeling>: View {
     @ObservedObject var viewModel: ViewModel
 
+    private var liveCaption: String {
+        let trimmed = viewModel.transcriptLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return "話すとここにライブ字幕が表示されます"
+        }
+        return trimmed
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("録音")
-                    .font(.largeTitle)
-                Spacer()
-                Button(viewModel.isPaused ? "録音開始" : "一時停止") {
-                    viewModel.toggleRecording()
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("録音")
+                        .font(.largeTitle)
+                        .fontWeight(.semibold)
+                    Text("マイク入力をリアルタイムで文字起こしします")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+
+                Spacer()
+
                 Button("音声ファイルをインポート...") {
                     viewModel.importAudio()
                 }
                 .buttonStyle(.bordered)
             }
 
-            GroupBox("状態") {
-                LabeledContent("録音") {
-                    Text(viewModel.isPaused ? "一時停止中" : "録音中")
-                }
-                LabeledContent("ライブ文字起こし") {
-                    Text(viewModel.transcriptLine.isEmpty ? "待機中" : viewModel.transcriptLine)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.trailing)
-                        .foregroundStyle(viewModel.transcriptLine.isEmpty ? .secondary : .primary)
-                }
-            }
+            ZStack {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(.thinMaterial)
 
-            GroupBox("入力レベル") {
                 WaveformCanvas(levels: viewModel.levels)
-                    .frame(height: 220)
-            }
+                    .opacity(viewModel.isPaused ? 0.28 : 0.58)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            Spacer()
+                VStack(spacing: 20) {
+                    Spacer()
+
+                    Button {
+                        viewModel.toggleRecording()
+                    } label: {
+                        VStack(spacing: 8) {
+                            Image(systemName: viewModel.isPaused ? "record.circle.fill" : "pause.circle.fill")
+                                .font(.system(size: 46, weight: .semibold))
+                            Text(viewModel.isPaused ? "録音開始" : "一時停止")
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                        }
+                        .foregroundStyle(.white)
+                        .frame(width: 156, height: 156)
+                        .background(
+                            Circle()
+                                .fill(viewModel.isPaused ? Color.gray.gradient : Color.red.gradient)
+                        )
+                        .overlay(
+                            Circle()
+                                .strokeBorder(.white.opacity(0.16), lineWidth: 1)
+                        )
+                        .shadow(color: .black.opacity(0.18), radius: 16, y: 8)
+                    }
+                    .buttonStyle(.plain)
+                    .help(viewModel.isPaused ? "録音開始" : "一時停止")
+
+                    Text(liveCaption)
+                        .font(.title3)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
+                        .background(.regularMaterial, in: Capsule())
+                        .padding(.horizontal, 42)
+                        .contentTransition(.opacity)
+
+                    Spacer()
+                }
+                .padding(22)
+            }
+            .frame(minHeight: 310, maxHeight: .infinity)
         }
         .padding(24)
     }
@@ -85,32 +132,74 @@ struct WaveformCanvas: View {
 
     var body: some View {
         Canvas { context, size in
-            guard levels.count > 1 else { return }
-
             let midY = size.height / 2
-            let step = size.width / CGFloat(max(1, levels.count - 1))
+            context.stroke(
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: midY))
+                    path.addLine(to: CGPoint(x: size.width, y: midY))
+                },
+                with: .color(.secondary.opacity(0.18)),
+                lineWidth: 1
+            )
 
-            var top = Path()
-            var bottom = Path()
+            let points = mirroredPoints(in: size)
+            guard points.top.count > 1 else { return }
 
-            for (idx, level) in levels.enumerated() {
-                let x = CGFloat(idx) * step
-                let amp = CGFloat(min(1.0, level * 7.0)) * (size.height * 0.42)
-                let yTop = midY + amp
-                let yBottom = midY - amp
-
-                if idx == 0 {
-                    top.move(to: CGPoint(x: x, y: yTop))
-                    bottom.move(to: CGPoint(x: x, y: yBottom))
-                } else {
-                    top.addLine(to: CGPoint(x: x, y: yTop))
-                    bottom.addLine(to: CGPoint(x: x, y: yBottom))
-                }
-            }
-
-            context.stroke(top, with: .color(.accentColor), lineWidth: 2)
-            context.stroke(bottom, with: .color(.accentColor), lineWidth: 2)
+            context.stroke(smoothPath(points: points.top), with: .color(.accentColor), lineWidth: 2)
+            context.stroke(smoothPath(points: points.bottom), with: .color(.accentColor), lineWidth: 2)
         }
+    }
+
+    private func mirroredPoints(in size: CGSize) -> (top: [CGPoint], bottom: [CGPoint]) {
+        guard !levels.isEmpty else { return ([], []) }
+
+        let desiredSpacing: CGFloat = 5.5
+        let slotCount = max(2, Int(size.width / desiredSpacing))
+        let step = size.width / CGFloat(slotCount - 1)
+        let recent = Array(levels.suffix(slotCount))
+        let startX = size.width - CGFloat(max(0, recent.count - 1)) * step
+        let midY = size.height / 2
+
+        let points: [(CGPoint, CGPoint)] = recent.enumerated().map { idx, level in
+            let x = startX + CGFloat(idx) * step
+            let normalized = CGFloat(min(1.0, max(0.0, level * 7.0)))
+            let smoothed = pow(normalized, 0.72)
+            let amplitude = smoothed * (size.height * 0.42)
+            return (
+                CGPoint(x: x, y: midY + amplitude),
+                CGPoint(x: x, y: midY - amplitude)
+            )
+        }
+
+        return (points.map(\.0), points.map(\.1))
+    }
+
+    private func smoothPath(points: [CGPoint]) -> Path {
+        var path = Path()
+        guard let first = points.first else { return path }
+        path.move(to: first)
+
+        guard points.count > 1 else { return path }
+        if points.count == 2 {
+            path.addLine(to: points[1])
+            return path
+        }
+
+        for index in 1..<points.count {
+            let previous = points[index - 1]
+            let current = points[index]
+            let mid = CGPoint(
+                x: (previous.x + current.x) / 2,
+                y: (previous.y + current.y) / 2
+            )
+            path.addQuadCurve(to: mid, control: previous)
+
+            if index == points.count - 1 {
+                path.addQuadCurve(to: current, control: current)
+            }
+        }
+
+        return path
     }
 }
 
@@ -360,6 +449,11 @@ private enum DashboardPreviewFactory {
 
         viewModel.isPaused = false
         viewModel.transcriptLine = "この行はライブ文字起こしのプレビューです。"
+        viewModel.transcriptPreviewLines = [
+            "この行はライブ文字起こしのプレビューです。",
+            "いま録音ページのデザインを確認しています。",
+            "音声入力は正常です。"
+        ]
         viewModel.levels = [0.02, 0.06, 0.11, 0.18, 0.09, 0.04, 0.14, 0.08, 0.03]
         viewModel.logs = """
 [12:10:15] App launched
@@ -385,6 +479,7 @@ private final class PreviewDashboardViewModel: DashboardViewModeling {
     @Published var selectedSection: DashboardSection? = .recording
     @Published var isPaused = true
     @Published var transcriptLine = ""
+    @Published var transcriptPreviewLines: [String] = []
     @Published var levels: [Float] = []
     @Published var documents: [DocumentRow] = []
     @Published var logs = ""
