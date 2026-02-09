@@ -38,7 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if isRunningForPreviews {
             return
         }
-        NSApp.setActivationPolicy(.accessory)
+        NSApp.setActivationPolicy(.regular)
         setupMenu()
         AppLog.shared.add("App launched")
         ModelManager.shared.ensureModelAvailable()
