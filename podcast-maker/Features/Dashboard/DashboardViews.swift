@@ -300,6 +300,15 @@ struct PodcastDashboardView<ViewModel: DashboardViewModeling>: View {
 
 struct SettingsDashboardView<ViewModel: DashboardViewModeling>: View {
     @ObservedObject var viewModel: ViewModel
+    @State private var showConnectionFailure = false
+    @State private var connectionFailureMessage = ""
+
+    private var connectionTestTitle: String {
+        if viewModel.bedrockStatus.hasPrefix("接続中") {
+            return "テスト中..."
+        }
+        return viewModel.bedrockStatus.hasPrefix("接続成功") ? "接続完了" : "接続テスト"
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -307,47 +316,51 @@ struct SettingsDashboardView<ViewModel: DashboardViewModeling>: View {
             Form {
                 Section("Amazon Bedrock") {
                     LabeledContent("AWS Profile") {
-                        HStack(spacing: 8) {
+                        HStack(spacing: 4) {
                             Picker("AWS Profile", selection: $viewModel.awsProfile) {
                                 ForEach(viewModel.availableProfiles, id: \.self) { profile in
                                     Text(profile).tag(profile)
                                 }
                             }
                             .labelsHidden()
-                            .frame(width: 260)
+                            .pickerStyle(.menu)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
                             .onChange(of: viewModel.awsProfile) {
                                 viewModel.saveProfile()
                             }
-                            
-                            Button("再読み込み") {
+
+                            Button {
                                 viewModel.reloadProfiles()
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
                             }
                             .buttonStyle(.bordered)
+                            .buttonBorderShape(.circle)
+                            .help("AWS Profile を再読み込み")
                         }
                     }
-                    
+
                     LabeledContent("設定ファイル") {
                         Text(viewModel.profileSourcePath)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
                     }
-                    
-                    LabeledContent("接続状態") {
-                        Text(viewModel.bedrockStatus)
-                    }
-                    
+
                     LabeledContent("トークン使用量") {
                         Text(viewModel.tokenSummary)
                             .multilineTextAlignment(.trailing)
                     }
-                    
-                    Button("接続テスト") {
-                        viewModel.testBedrock()
+
+                    HStack {
+                        Spacer()
+                        Button(connectionTestTitle) {
+                            viewModel.testBedrock()
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
-                    .buttonStyle(.borderedProminent)
                 }
-                
+
                 Section("Whisper") {
                     LabeledContent("モデルパス") {
                         Text(viewModel.modelPath)
@@ -369,6 +382,22 @@ struct SettingsDashboardView<ViewModel: DashboardViewModeling>: View {
             .formStyle(.grouped)
             .onAppear {
                 viewModel.reloadProfiles()
+            }
+            .onChange(of: viewModel.bedrockStatus) {
+                let prefix = "接続失敗:"
+                if viewModel.bedrockStatus.hasPrefix(prefix) {
+                    connectionFailureMessage = String(viewModel.bedrockStatus.dropFirst(prefix.count))
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    if connectionFailureMessage.isEmpty {
+                        connectionFailureMessage = "Bedrock への接続に失敗しました。"
+                    }
+                    showConnectionFailure = true
+                }
+            }
+            .alert("接続失敗", isPresented: $showConnectionFailure) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(connectionFailureMessage)
             }
         }
         .padding(24)
